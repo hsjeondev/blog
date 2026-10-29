@@ -54,10 +54,9 @@ export default function Home({ list, loadError }) {
         <span style={{ color: 'var(--foreground)' }}>책</span>으로 쌓은 <span style={{ color: 'var(--foreground)' }}>지식</span>을 기록하고 연결합니다.
       </motion.h1>
       <motion.button
-        onClick={() => window.open('https://yuntae.in', '_blank')}
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
-        className="text-white text-md font-extrabold py-2 px-4 rounded-2xl mb-16"
+        className="hidden text-white text-md font-extrabold py-2 px-4 rounded-2xl mb-16"
         style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }}>
         About Me <IonIcon name="chevron-forward" className="relative top-1" />
       </motion.button>

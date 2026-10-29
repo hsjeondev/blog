@@ -143,7 +143,7 @@ export const ArticleCard = ({ post, onClick }) => {
                 </motion.span>
 
                 {post.icon && (
-                    <motion.div layoutId={`icon-${post.id}`} className="absolute bottom-0 right-0 w-1/5 md:w-2/5">
+                    <motion.div layoutId={`icon-${post.id}`} className="absolute bottom-0 right-0 w-1/5">
                         {post.icon.type === 'emoji'
                           ? <span role="img" aria-label="책 아이콘" className="text-5xl">{post.icon.emoji}</span>
                           : <img src={post.icon.file?.url || post.icon.external?.url || (post.icon.custom_emoji?.url)} alt="책 아이콘" className="w-full aspect-square grayscale" />}

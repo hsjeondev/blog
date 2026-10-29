@@ -24,30 +24,29 @@ test('the embed component renders without title, category or tags properties', (
   const component=source.statements.find(node=>ts.isFunctionDeclaration(node) && node.name?.text==='Page');
   const code=ts.createPrinter().printNode(ts.EmitHint.Unspecified,component,source).replace(/^export default\s+/,'');
   const compiled=ts.transpileModule(code,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
-  const Page=new Function('require','exports','useState','useEffect','NotionRenderer','Code','Collection','Equation','Modal',compiled+'\nreturn Page;')(require,{},value=>[value,()=>{}],()=>{},()=>null,null,null,null,null);
+  const Page=new Function('require','exports','useState','useEffect','NotionRenderer','Code','Collection','Equation','Modal','mapPublishedImageUrl',compiled+'\nreturn Page;')(require,{},value=>[value,()=>{}],()=>{},()=>null,null,null,null,null, value=>value);
   assert.doesNotThrow(()=>Page({pageId:id,recordMap:{block:{[id]:{value:{id,type:'page',properties:{}}}}}}));
 });
 
 function pageFunctions(path, getNotionPage) {
   const source = ts.createSourceFile(path, fs.readFileSync(path,'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   const printer = ts.createPrinter();
-  const code = source.statements.filter(node => ts.isFunctionDeclaration(node) && ['getStaticPaths','getStaticProps'].includes(node.name?.text)).map(node => printer.printNode(ts.EmitHint.Unspecified,node,source).replace(/^export\s+/, '')).join('\n');
-  return new Function('deferredNotionPaths','getNotionPage','isNotionNotFound','manageSummary','extractTextFromRecordMap','console',code+'\nreturn {getStaticPaths,getStaticProps};')(deferredNotionPaths,getNotionPage,isNotionNotFound,async()=>null,()=>'',{error(){}});
+  const code = source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === 'getServerSideProps').map(node => printer.printNode(ts.EmitHint.Unspecified,node,source).replace(/^export\s+/, '')).join('\n');
+  return new Function('getNotionPage','isNotionNotFound','console',code+'\nreturn getServerSideProps;')(getNotionPage,isNotionNotFound,{error(){}});
 }
-test('both actual page loaders defer build fetching and rethrow 429 so a later request can regenerate', async () => {
+test('detail and embed recheck publication on every request without ISR or public caching', async () => {
   for (const path of ['pages/[pageId].js','pages/embed/[pageId].js']) {
-    let calls=0;
-    let reason = Object.assign(new Error('rate limited'),{statusCode:429});
-    const page=pageFunctions(path,async()=>{calls++;throw reason;});
-    assert.deepEqual(await page.getStaticPaths(),{paths:[],fallback:'blocking'});
-    assert.equal(calls,0);
-    await assert.rejects(page.getStaticProps({params:{pageId:id}}),error=>error===reason);
-    reason=Object.assign(new Error('not found'),{statusCode:404});
-    assert.deepEqual(await page.getStaticProps({params:{pageId:id}}),{notFound:true,revalidate:60});
+    const headers = {};
+    const context = {params:{pageId:id}, res:{setHeader(k,v){headers[k]=v;}}};
+    const hidden=pageFunctions(path,async()=>{throw Object.assign(new Error('hidden'),{status:404});});
+    assert.deepEqual(await hidden(context),{notFound:true});
+    assert.match(headers['Cache-Control'], /no-store/);
     const success=pageFunctions(path,async()=>({block:{[id]:{value:{id,type:'page'}}}}));
-    const result=await success.getStaticProps({params:{pageId:id}});
+    const result=await success(context);
     assert.equal(result.props.pageId,id);
-    assert.equal(result.revalidate,10);
+    assert.equal(result.revalidate,undefined);
+    const limited=pageFunctions(path,async()=>{throw Object.assign(new Error('limited'),{status:429});});
+    await assert.rejects(limited(context),error=>error.status===429);
   }
 });
 

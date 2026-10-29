@@ -11,27 +11,8 @@ export function blockValue(entry: any) {
   return entry?.value || entry;
 }
 
-export async function fetchNotionBacklinks(currentId: string, signal?: AbortSignal) {
-  const response = await fetch("https://app.notion.com/api/v3/getBacklinksForBlockInitial", {
-    method: "POST",
-    signal,
-    headers: {
-      "content-type": "application/json",
-      cookie: `token_v2=${process.env.NOTION_TOKEN};`,
-    },
-    body: JSON.stringify({
-      block: {
-        id: currentId,
-        spaceId: "efee2221-b063-4e3f-b2ba-7931ce73adb9",
-      },
-    }),
-  });
-
-  if (!response.ok) throw new Error(`Backlink request failed: ${response.status}`);
-  return response.json();
-}
-
 export function resolveBacklinkSources(payload: any): BacklinkSource[] {
+  if (Array.isArray(payload?.sources)) return payload.sources;
   const backlinks = Array.isArray(payload?.backlinks) ? payload.backlinks : [];
   const blocks = payload?.recordMap?.block || {};
   const sources = new Map<string, BacklinkSource>();

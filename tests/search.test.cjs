@@ -10,15 +10,18 @@ const { normalizeFolderPath, folderPathFromProperty, folderAncestors, buildFolde
 const { normalizePage, searchContent, inScope } = require('../utils/search/search-service.ts');
 const { clientAddress, reserveUsage, agentConfigured, answerCacheKey, agentModel, missingAgentSettings, getAnswerCache, setAnswerCache } = require('../utils/agent/usage.ts');
 const { createAgentTools } = require('../utils/agent/tools.ts');
-const { NotionAPI } = require('notion-client');
+const pageReader = require('../utils/get-notion-page.ts');
+const publication = require('../utils/published-notion.ts');
+process.env.NOTION_MYBOOKLIST_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+process.env.NOTION_TOKEN = 'test-only';
 const { runSearchAgent } = require('../utils/agent/search-agent.ts');
 const searchHandler = require('../pages/api/search.ts').default;
 const agentHandler = require('../pages/api/agent/search.ts').default;
 
 const doc = { id: '11111111-1111-4111-8111-111111111111', title: 'KMP', type: 'document', folderPath: '개발/Web', href: '/forest?document=11111111-1111-4111-8111-111111111111', createdTime: '2026-01-01', lastEditedTime: '2026-10-17' };
 function page(item, category) {
-  return { id: item.id, created_time: item.createdTime, last_edited_time: item.lastEditedTime,
-    properties: { 이름: { type: 'title', title: [{ plain_text: item.title }] }, forest_폴더: { select: { name: item.folderPath } }, forest_분류: { select: { name: category } } } };
+  return { object: 'page', parent: { database_id: process.env.NOTION_MYBOOKLIST_ID }, id: item.id, created_time: item.createdTime, last_edited_time: item.lastEditedTime,
+    properties: { 공개: { type: 'checkbox', checkbox: true }, 이름: { type: 'title', title: [{ plain_text: item.title }] }, forest_폴더: { select: { name: item.folderPath } }, forest_분류: { select: { name: category } } } };
 }
 function response() {
   const result = new EventEmitter();
@@ -50,28 +53,27 @@ test('normalized results retain page routes and metadata', () => {
   assert.equal(folderPathFromProperty(undefined), '');
 });
 
-test('body search resolves owning page, excludes unknown pages and degrades to title search', async () => {
-  const original = global.fetch;
+test('body search reads only the published catalog and retains title results on body failure', async () => {
+  const original = global.fetch, reader = pageReader.getNotionPage;
   try {
-    global.fetch = async (url) => {
-      if (String(url).includes('/databases/')) return Response.json({ results: String(url).includes('ff85') ? [page(doc, '문서')] : [] });
-      return Response.json({ results: [{ id: 'child', highlight: { text: '<gzkNfoUU>본문</gzkNfoUU><script>x</script>' } }, { id: 'outside', highlight: { text: 'private' } }], recordMap: { block: { child: { value: { parent_id: doc.id } } } } });
-    };
+    global.fetch = async () => Response.json({ results: [page(doc, '문서')] });
+    pageReader.getNotionPage = async () => ({ block: { text: {value:{type:'text',properties:{title:[['본문 내용']]}}} } });
     const result = await searchContent('본문', 'document', '개발');
     assert.equal(result.partial, false);
     assert.equal(result.results.length, 1);
     assert.equal(result.results[0].href, doc.href);
-    assert.equal(result.results[0].excerpt, '본문x');
-    global.fetch = async () => { throw new Error('unavailable'); };
-    assert.deepEqual((await searchContent('KMP', 'document')).results.map((item) => item.id), [doc.id]);
-    assert.equal((await searchContent('KMP')).partial, true);
-  } finally { global.fetch = original; }
+    assert.match(result.results[0].excerpt, /본문/);
+    pageReader.getNotionPage = async () => { throw new Error('unavailable'); };
+    assert.deepEqual((await searchContent('KMP', 'document')).results.map(item => item.id), [doc.id]);
+    assert.equal((await searchContent('missing')).partial, true);
+  } finally { global.fetch = original; pageReader.getNotionPage = reader; }
 });
 
 test('agent tools enforce scope, public text traversal, source membership and five-read budget', async () => {
-  const original = NotionAPI.prototype.getPage;
+  const original = pageReader.getNotionPage, gate = publication.getPublishedPage;
+  publication.getPublishedPage = async () => ({});
   let reads = 0;
-  NotionAPI.prototype.getPage = async (id) => { reads++; return { block: {
+  pageReader.getNotionPage = async (id) => { reads++; return { block: {
     [id]: { value: { type: 'page', content: ['text', 'subpage'] } },
     text: { value: { type: 'text', properties: { title: [['a'.repeat(15000)]] } } },
     subpage: { value: { type: 'page', properties: { title: [['not part of document']] } } },
@@ -92,7 +94,7 @@ test('agent tools enforce scope, public text traversal, source membership and fi
     assert.ok((await access.run('read_document', { pageId: 'read-5' })).error);
     assert.equal(reads, 5);
     assert.equal(access.sources.size, 5);
-  } finally { NotionAPI.prototype.getPage = original; }
+  } finally { pageReader.getNotionPage = original; publication.getPublishedPage = gate; }
 });
 
 test('rate limiting ignores spoofed forwarding off Vercel and fails closed', async () => {
@@ -147,15 +149,16 @@ test('API rejects invalid scopes, disabled agent and exhausted shared usage befo
 
 test('Responses function loop reads evidence then streams answer with server-owned sources', async () => {
   const originalFetch = global.fetch;
-  const originalPage = NotionAPI.prototype.getPage;
+  const originalPage = pageReader.getNotionPage, gate = publication.getPublishedPage;
+  publication.getPublishedPage = async () => ({});
   const previous = { ...process.env };
   const events = [];
   let rounds = 0;
   try {
     process.env.OPENAI_API_KEY = 'test-no-network'; delete process.env.SEARCH_AGENT_MODEL;
-    NotionAPI.prototype.getPage = async (id) => ({ block: { [id]: { value: { type: 'page', content: ['text'] } }, text: { value: { type: 'text', properties: { title: [['KMP shared code']] } } } } });
+    pageReader.getNotionPage = async (id) => ({ block: { [id]: { value: { type: 'page', content: ['text'] } }, text: { value: { type: 'text', properties: { title: [['KMP shared code']] } } } } });
     global.fetch = async (url, init) => {
-      if (!String(url).includes('api.openai.com')) return Response.json({ results: [], recordMap: {} });
+      if (!String(url).includes('api.openai.com')) return Response.json({ results: [page(doc, '문서')], recordMap: {} });
       const body = JSON.parse(init.body);
       assert.equal(body.store, false);
       assert.equal(body.model, "gpt-5.6-terra");
@@ -179,7 +182,7 @@ test('Responses function loop reads evidence then streams answer with server-own
     assert.ok(!JSON.stringify(progress).includes('KMP shared code'));
     assert.ok(events.findIndex(event => event.type === 'progress') < events.findIndex(event => event.type === 'delta'));
     assert.equal(rounds, 3);
-  } finally { global.fetch = originalFetch; NotionAPI.prototype.getPage = originalPage; process.env = previous; }
+  } finally { global.fetch = originalFetch; pageReader.getNotionPage = originalPage; publication.getPublishedPage = gate; process.env = previous; }
 });
 
 test('agent stops at eight tool calls and returns an evidence-free answer without invented sources', async () => {
@@ -189,7 +192,7 @@ test('agent stops at eight tool calls and returns an evidence-free answer withou
   try {
     process.env.OPENAI_API_KEY = 'test-no-network'; process.env.SEARCH_AGENT_MODEL = 'test';
     global.fetch = async (url) => {
-      if (!String(url).includes('api.openai.com')) return Response.json({ results: [], recordMap: {} });
+      if (!String(url).includes('api.openai.com')) return Response.json({ results: [page(doc, '문서')], recordMap: {} });
       calls++;
       return Response.json({ id: `r${calls}`, object: 'response', status: 'completed', output: [{ type: 'function_call', id: `fc${calls}`, call_id: `call${calls}`, name: 'search_content', arguments: '{"query":"KMP"}' }] });
     };

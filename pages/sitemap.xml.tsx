@@ -1,53 +1,16 @@
-import { getDatabase } from '../utils/get-database';
-import { GetServerSideProps } from 'next';
-
-const Sitemap = () => null;
-
-const generateSiteMap = (posts: any[]) => {
-    return `<?xml version="1.0" encoding="UTF-8"?>
-    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-      <url>
-        <loc>https://blog.yuntae.in</loc>
-        <priority>1.0</priority>
-      </url>
-      ${posts
-            .map((post) => {
-                return `
-            <url>
-              <loc>${`https://blog.yuntae.in/${post.id}`}</loc>
-              <lastmod>${new Date(post.properties.작성일.date?.start).toISOString()}</lastmod>
-            </url>
-          `;
-            })
-            .join('')}
-    </urlset>`;
-};
-
+import { publishedBooks, siteUrl } from '../utils/published-notion';
+import { noPublicationCache } from '../utils/notion-server';
+import type { GetServerSideProps } from 'next';
 export const getServerSideProps: GetServerSideProps = async ({ res }) => {
-    try {
-        const posts = await getDatabase("1a346171ed574b0a9c1c3f5a29b39919", {
-            sorts: [
-                {
-                    property: "cwqu",
-                    direction: "descending"
-                }
-            ]
-        });
-
-        const sitemap = generateSiteMap(posts.results);
-        res.setHeader('Content-Type', 'application/xml');
-        res.write(sitemap);
-        res.end();
-
-        return {
-            props: {}
-        };
-    } catch (error) {
-        console.error('Failed to generate sitemap:', error);
-        return {
-            props: {}
-        };
-    }
+  noPublicationCache(res);
+  try {
+    const books = await publishedBooks();
+    const escape = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const origin = escape(siteUrl());
+    const xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>' + origin + '</loc></url>'
+      + books.map((book) => '<url><loc>' + origin + '/' + book.id + '</loc><lastmod>' + new Date(book.lastEditedTime).toISOString() + '</lastmod></url>').join('') + '</urlset>';
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8'); res.write(xml); res.end();
+  } catch { res.statusCode = 503; res.end('Sitemap unavailable'); }
+  return { props: {} };
 };
-
-export default Sitemap;
+export default function Sitemap() { return null; }

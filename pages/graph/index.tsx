@@ -71,7 +71,7 @@ export default function GraphPage() {
 
   return (
     <main className="graph-page">
-      <PageHead title="문서 그래프 | 태인의 Blog" url="https://blog.yuntae.in/graph" />
+      <PageHead title="문서 그래프 | 프리머그의 Blog" url="https://blog.yuntae.in/graph" />
       <section className="graph-stage" aria-live="polite">
         <button type="button" className="graph-back-button" onClick={() => router.back()} aria-label="이전 페이지로 돌아가기">
           <IonIcon name="chevron-back-outline" />

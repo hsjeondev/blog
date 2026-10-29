@@ -10,8 +10,8 @@ export const PostActions = ({ title, pageId }) => {
     const handleShare = async () => {
         try {
             await navigator.share({
-                title: "태인의 Blog",
-                text: title + " - 태인의 Blog",
+                title: "프리머그의 Blog",
+                text: title + " - 프리머그의 Blog",
                 url: window.location.href,
             });
         } catch (error) {

@@ -5,10 +5,8 @@ import Comments from '../components/Comments'
 import { Backlinks } from '../components/Backlinks'
 import { PageHead } from '../components/PageHead'
 import { motion } from 'framer-motion';
-import { Code, Collection, Equation, Modal } from '../utils/notion-components'
-import { deferredNotionPaths, getNotionPage, isNotionNotFound } from '../utils/get-notion-page'
-import { manageSummary } from '../utils/notion-summary-service'
-import { extractTextFromRecordMap } from '../utils/extract-text'
+import { Code, Collection, Equation, Modal, mapPublishedImageUrl } from '../utils/notion-components'
+import { getNotionPage, isNotionNotFound } from '../utils/get-notion-page'
 
 import { usePostMetadata } from '../hooks/usePostMetadata'
 import { useReadingTime } from '../hooks/useReadingTime'
@@ -17,11 +15,8 @@ import { useDarkMode } from '../hooks/useDarkMode'
 import { PostHeader } from '../components/Post/PostHeader'
 import { PostActions } from '../components/Post/PostActions'
 
-export async function getStaticPaths() {
-    return deferredNotionPaths();
-}
-
-export async function getStaticProps({ params }) {
+export async function getServerSideProps({ params, res }) {
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     const { pageId: rawPageId } = params;
     if (!rawPageId) {
         return {
@@ -48,27 +43,18 @@ export async function getStaticProps({ params }) {
     try {
         const recordMap = await getNotionPage(pageId)
 
-        // Check if it's a post (has category)
-        const block = recordMap.block[pageId].value;
-        const isPost = block.properties && block.properties["fVc<"]; // Category property check
-
-        let summary = null;
-        if (isPost) {
-            const text = extractTextFromRecordMap(recordMap);
-            summary = await manageSummary(pageId, text);
-        }
+        const summary = null; // AI summaries will be enabled in a later step.
 
         return {
             props: {
                 pageId,
                 recordMap,
                 summary
-            },
-            revalidate: 10
+            }
         }
     } catch (error) {
-        console.error('Error fetching page:', error);
-        if (isNotionNotFound(error)) return { notFound: true, revalidate: 60 };
+        if (isNotionNotFound(error)) return { notFound: true };
+        console.error('Failed to read published page');
         throw error;
     }
 }
@@ -122,7 +108,7 @@ export default function Page({ pageId, recordMap, summary }) {
             variants={containerVariants}
         >
             <PageHead
-                title={title || "태인의 Blog"}
+                title={title || "프리머그의 Blog"}
                 url={`https://blog.yuntae.in/${pageId}`}
                 image={`${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/api/social-image?id=${pageId}`}
             />
@@ -142,6 +128,7 @@ export default function Page({ pageId, recordMap, summary }) {
                 <motion.div variants={itemVariants} ref={narrationContentRef} className="post-narration-content">
                     <NotionRenderer
                         recordMap={recordMap}
+                        mapImageUrl={mapPublishedImageUrl}
                         components={{
                             Code,
                             Collection,

@@ -3,6 +3,8 @@ export const usePostMetadata = (pageId, recordMap) => {
         return { title: '', category: '', tags: [] };
     }
 
+    const metadata = recordMap.block[pageId].value.blog_metadata;
+    if (metadata) return { title: metadata.title, category: metadata.category, tags: metadata.tags.map(tag => tag.name), date: metadata.date?.slice(0, 10) || '' };
     const properties = recordMap.block[pageId].value.properties;
     let title = '';
     let category = '';

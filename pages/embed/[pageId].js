@@ -2,14 +2,11 @@ import { NotionRenderer } from '../../packages/notionx'
 import 'katex/dist/katex.min.css'
 import { useEffect, useState } from 'react'
 import { calculateReadingTime } from '../../utils/readingTime'
-import { Code, Collection, Equation, Pdf, Modal } from '../../utils/notion-components'
-import { deferredNotionPaths, getNotionPage, isNotionNotFound } from '../../utils/get-notion-page'
+import { Code, Collection, Equation, Pdf, Modal, mapPublishedImageUrl } from '../../utils/notion-components'
+import { getNotionPage, isNotionNotFound } from '../../utils/get-notion-page'
 
-export async function getStaticPaths() {
-    return deferredNotionPaths();
-}
-
-export async function getStaticProps({ params }) {
+export async function getServerSideProps({ params, res }) {
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0');
     const { pageId: rawPageId } = params;
     if (!rawPageId) {
         return {
@@ -40,12 +37,11 @@ export async function getStaticProps({ params }) {
             props: {
                 pageId,
                 recordMap
-            },
-            revalidate: 10
+            }
         }
     } catch (error) {
-        console.error('Error fetching page:', error);
-        if (isNotionNotFound(error)) return { notFound: true, revalidate: 60 };
+        if (isNotionNotFound(error)) return { notFound: true };
+        console.error('Failed to read published page');
         throw error;
     }
 }
@@ -168,6 +164,7 @@ export default function Page({ pageId, recordMap }) {
         <div className="custom-content">
             <NotionRenderer
                 recordMap={recordMap}
+                        mapImageUrl={mapPublishedImageUrl}
                 components={{
                     Code,
                     Collection,

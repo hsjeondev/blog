@@ -1,51 +1,23 @@
-import { Client } from '@notionhq/client';
-
-import { NextApiRequest, NextApiResponse } from 'next';
-
-const notion = new Client({ auth: process.env.NOTION_API_KEY });
-
-const responseJSON = (res: NextApiResponse, status: number, json: any) => {
-  res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8').send(json);
-};
-
-export default async (req: NextApiRequest, res: NextApiResponse) => {
-  const { id, cursor } = req.query;
-
-  if (req.method === 'POST') {
-    if (!req.body.content) {
-      return responseJSON(res, 400, { message: 'content is required' });
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { getPublishedPage } from '../../../utils/published-notion';
+import { noPublicationCache, notionRequest } from '../../../utils/notion-server';
+import { isNotionNotFound } from '../../../utils/get-notion-page';
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  noPublicationCache(res);
+  if (!['GET', 'POST'].includes(req.method || '')) return res.status(405).json({ error: 'method not allowed' });
+  try {
+    const page = await getPublishedPage(req.query.id as string);
+    if (req.method === 'POST') {
+      const content = req.body?.content;
+      if (typeof content !== 'string' || !content.trim() || content.length > 2000) return res.status(400).json({ error: 'Invalid comment' });
+      await notionRequest('comments', { parent: { page_id: page.id }, rich_text: [{ text: { content } }] });
+      return res.json({ ok: true });
     }
-
-    try {
-      const result = await notion.comments.create({
-        parent: {
-          page_id: id as string,
-        },
-        rich_text: [
-          {
-            text: {
-              content: req.body.content,
-            },
-          },
-        ],
-      });
-
-      return responseJSON(res, 200, result);
-    } catch (error) {
-      return responseJSON(res, error.status, error.body);
-    }
-  } else if (req.method === 'GET') {
-    try {
-      const result = await notion.comments.list({
-        block_id: id as string,
-        ...(cursor && { start_cursor: cursor as string }),
-      });
-
-      return responseJSON(res, 200, result);
-    } catch (error) {
-      return responseJSON(res, error.status, error.body);
-    }
-  }
-
-  return responseJSON(res, 405, { message: 'method not allowed' });
-};
+    const cursor = typeof req.query.cursor === 'string' ? '&start_cursor=' + encodeURIComponent(req.query.cursor) : '';
+    const data = await notionRequest('comments?block_id=' + page.id + cursor);
+    return res.json({ results: (data.results || []).map((comment: any) => ({
+      id: comment.id, created_time: comment.created_time, created_by: { id: '' },
+      rich_text: [{ plain_text: (comment.rich_text || []).map((part: any) => part.plain_text || part.text?.content || '').join('') }],
+    })), has_more: data.has_more, next_cursor: data.next_cursor });
+  } catch (error) { return res.status(isNotionNotFound(error) ? 404 : 502).json({ error: 'Comments unavailable' }); }
+}

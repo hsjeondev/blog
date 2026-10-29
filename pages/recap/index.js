@@ -1,8 +1,10 @@
 import { PageHead } from "../../components/PageHead";
 import { RecapViewer } from "../../components/Recap/RecapViewer";
 import { getDatabase } from "../../utils/get-database";
+import { bookMetadata, publicationKind } from "../../utils/published-notion";
+import { noPublicationCache } from "../../utils/notion-server";
 
-const FOREST_DATABASE_ID = "ff85c8c8bc3345babf2f7970d86506d4";
+
 
 function propertyText(property) {
   if (!property) return "";
@@ -49,15 +51,14 @@ function monthKey(value) {
   return year && month ? `${year}-${month}` : "";
 }
 
-export async function getStaticProps() {
+export async function getServerSideProps({ res }) {
+  noPublicationCache(res);
   try {
-    const data = await getDatabase(FOREST_DATABASE_ID, {
-      filter: { property: "forest_분류", select: { equals: "일지" } },
-    });
+    const data = await getDatabase();
     const currentMonth = monthKey(new Date());
-    const posts = data.results.map((page) => ({
+    const posts = data.results.filter((page) => publicationKind(page) === "recap").map((page) => ({
       id: page.id,
-      title: propertyText(page.properties?.["이름"]) || "월말결산",
+      title: bookMetadata(page).title,
       subtitle: propertyText(namedProperty(page.properties, "subtitle")),
       date: page.properties?.["forest_날짜"]?.date?.start || page.created_time,
       properties: {
@@ -69,17 +70,18 @@ export async function getStaticProps() {
       .filter((post) => monthKey(post.date) !== currentMonth)
       .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    return { props: { posts }, revalidate: 10 };
+    return { props: { posts } };
   } catch (error) {
     console.error("Failed to fetch recap:", error);
-    return { props: { posts: [] }, revalidate: 60 };
+    res.statusCode = 503;
+    return { props: { posts: [] } };
   }
 }
 
 export default function Recap({ posts }) {
   return (
     <>
-      <PageHead title="월말결산 | 태인의 Blog" url="https://blog.yuntae.in/recap" />
+      <PageHead title="월말결산 | 프리머그의 Blog" url="https://blog.yuntae.in/recap" />
       <RecapViewer posts={posts} />
     </>
   );

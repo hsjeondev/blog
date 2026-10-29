@@ -1,44 +1,22 @@
-import { fetchNotionJson } from './notion-fetch';
+import { bookDatabaseId, isPublishedBook, notionId, notionRequest, notPublished } from './notion-server';
 
-export async function getDatabase(databaseId, body = {}) {
-    if (!databaseId) {
-        throw new Error('Database ID is required');
-    }
-
-    let results = [];
-    let cursor = null;
-    let hasMore = true;
-
-    const pageSize = 100;
-
-    try {
-        while (hasMore) {
-            const requestBody = {
-                ...body,
-                page_size: pageSize,
-                ...(cursor && { start_cursor: cursor }),
-            };
-
-            const options = {
-                method: 'POST',
-                headers: {
-                    'Notion-Version': '2022-06-28',
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
-                },
-                body: JSON.stringify(requestBody),
-            };
-
-            const data = await fetchNotionJson(`https://api.notion.com/v1/databases/${databaseId}/query`, options);
-
-            results = [...results, ...data.results];
-
-            hasMore = data.has_more;
-            cursor = data.next_cursor;
-        }
-
-        return { results };
-    } catch (error) {
-        throw error;
-    }
+// Every caller, including the legacy API route, must use this publication boundary.
+export async function getDatabase(databaseId = bookDatabaseId(), body: any = {}) {
+  const id = notionId(databaseId);
+  if (!id || id !== bookDatabaseId()) throw notPublished();
+  const publication = { property: '공개', checkbox: { equals: true } };
+  const results: any[] = [];
+  let cursor: string | undefined;
+  do {
+    const data = await notionRequest('databases/' + id + '/query', {
+      page_size: 100,
+      sorts: body.sorts || [{ timestamp: 'last_edited_time', direction: 'descending' }],
+      filter: body.filter ? { and: [publication, body.filter] } : publication,
+      ...(cursor ? { start_cursor: cursor } : {}),
+    });
+    results.push(...(data.results || []).filter(isPublishedBook));
+    cursor = data.has_more ? data.next_cursor : undefined;
+    if (data.has_more && !cursor) throw new Error('Incomplete Notion pagination');
+  } while (cursor);
+  return { results };
 }

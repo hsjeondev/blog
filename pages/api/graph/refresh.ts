@@ -1,20 +1,13 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-import { buildGraphData } from "../../../utils/build-graph-data";
-import { hasPersistentGraphCache, writeGraphSnapshot } from "../../../utils/graph-cache";
-
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { buildGraphData } from '../../../utils/build-graph-data';
+import { noPublicationCache } from '../../../utils/notion-server';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "GET") return res.status(405).json({ error: "method not allowed" });
-  if (!process.env.CRON_SECRET || req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ error: "unauthorized" });
-  }
-  if (!hasPersistentGraphCache()) return res.status(503).json({ error: "blob cache is not configured" });
+  noPublicationCache(res);
+  if (req.method !== 'GET') return res.status(405).json({ error: 'method not allowed' });
+  if (!process.env.CRON_SECRET || req.headers.authorization !== 'Bearer ' + process.env.CRON_SECRET) return res.status(401).json({ error: 'unauthorized' });
   try {
-    const snapshot = await buildGraphData();
-    await writeGraphSnapshot(snapshot);
-    return res.status(200).json({ ok: true, generatedAt: snapshot.generatedAt, nodes: snapshot.nodes.length, links: snapshot.links.length });
-  } catch {
-    return res.status(500).json({ error: "failed to refresh graph" });
-  }
+    const graph = await buildGraphData(AbortSignal.timeout(45_000));
+    return res.json({ ok: true, generatedAt: graph.generatedAt, nodes: graph.nodes.length, links: graph.links.length });
+  } catch { return res.status(502).json({ error: 'failed to load graph' }); }
 }
-
 export const config = { maxDuration: 60 };

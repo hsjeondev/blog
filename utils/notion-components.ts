@@ -25,3 +25,8 @@ const Modal = dynamic(
 )
 
 export { Code, Collection, Equation, Pdf, Modal }
+// Official API attachment URLs are already signed; preserve them for private Notion pages.
+export function mapPublishedImageUrl(url: string | undefined) {
+    if (!url) return undefined;
+    try { return ['https:', 'http:'].includes(new URL(url).protocol) ? url : undefined; } catch { return undefined; }
+}

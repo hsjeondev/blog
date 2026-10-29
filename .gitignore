@@ -45,3 +45,5 @@ yarn-error.log*
 next-env.d.ts
 
 /blog-audio-server
+# Safe, value-free configuration template
+!/.env.example

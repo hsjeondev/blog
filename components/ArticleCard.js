@@ -10,7 +10,7 @@ export const ArticleCard = ({ post, onClick }) => {
     const handleClick = (e) => {
         e.preventDefault();
         if (isAnimating) return;
-        const articleTitle = post.properties.이름.title[0]?.plain_text;
+        const articleTitle = post.title;
         if (articleTitle) {
             setTitle(articleTitle);
             setPostId(post.id);
@@ -49,7 +49,7 @@ export const ArticleCard = ({ post, onClick }) => {
                     }}
                     className="shimmering w-fit text-3xl md:text-5xl font-black mt-2"
                 >
-                    {post.properties.이름.title[0]?.plain_text}
+                    {post.title}
                 </motion.h2>
             </motion.div>
         );
@@ -96,18 +96,18 @@ export const ArticleCard = ({ post, onClick }) => {
                 >
                     <span
                         style={{
-                            color: post.properties.카테고리.select?.name.includes('스터디')
+                            color: post.category.includes('스터디')
                                 ? 'var(--category-text-1)'
-                                : post.properties.카테고리.select?.name.includes('프로젝트')
+                                : post.category.includes('프로젝트')
                                     ? 'var(--category-text-2)'
                                     : 'var(--category-text-3)',
                         }}
                         className="text-xs"
                     >
-                        <span>{post.properties.카테고리.select?.name}</span>
+                        <span>{post.category}</span>
 
                         &nbsp;&nbsp;
-                        {post.properties.태그.multi_select.map((tag) => (
+                        {post.tags.map((tag) => (
                             <span
                                 key={tag.id}
                                 style={{
@@ -131,7 +131,7 @@ export const ArticleCard = ({ post, onClick }) => {
                     }}
                     className="text-xl md:text-2xl font-black m-0 w-2/3 h-full mb-3"
                 >
-                    {post.properties.이름.title[0]?.plain_text}
+                    {post.title}
                 </motion.h2>
 
                 <motion.span
@@ -139,20 +139,14 @@ export const ArticleCard = ({ post, onClick }) => {
                     style={{ color: 'var(--date-text)' }}
                     className="text-xs mt-auto font-bold"
                 >
-                    {new Date(post.properties.작성일.date?.start).toLocaleDateString()}
+                    {new Date(post.date).toLocaleDateString()}
                 </motion.span>
 
                 {post.icon && (
-                    <motion.div
-                        layoutId={`icon-${post.id}`}
-                        className="absolute bottom-0 right-0 w-1/5 md:w-2/5"
-                    >
-                        <img
-                            src={(post.icon.icon?.name && post.icon.icon?.color) ? `https://www.notion.so/icons/${post.icon.icon.name}_${post.icon.icon.color}.svg` : (post.icon.emoji || post.icon.file?.url || post.icon.external?.url)}
-                            alt="Post icon"
-                            id="post-icon"
-                            className="w-full rounded-none aspect-square grayscale transition-all ease-in"
-                        />
+                    <motion.div layoutId={`icon-${post.id}`} className="absolute bottom-0 right-0 w-1/5 md:w-2/5">
+                        {post.icon.type === 'emoji'
+                          ? <span role="img" aria-label="책 아이콘" className="text-5xl">{post.icon.emoji}</span>
+                          : <img src={post.icon.file?.url || post.icon.external?.url || (post.icon.custom_emoji?.url)} alt="책 아이콘" className="w-full aspect-square grayscale" />}
                     </motion.div>
                 )}
             </motion.div>

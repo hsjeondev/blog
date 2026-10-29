@@ -1,5 +1,7 @@
-import { NotionAPI } from "notion-client";
-import { blockValue, compactNotionId, fetchNotionBacklinks, resolveBacklinkSources } from "../backlink-graph";
+import { fetchNotionBacklinks } from '../notion-backlinks';
+import { getNotionPage } from "../get-notion-page";
+import { getPublishedPage } from "../published-notion";
+import { blockValue, compactNotionId, resolveBacklinkSources } from "../backlink-graph";
 import { inScope, searchContent } from "../search/search-service";
 import { normalizeFolderPath } from "../search/folders";
 import type { SearchResult, SearchScope } from "../search/types";
@@ -26,13 +28,12 @@ export function createAgentTools(catalog: SearchResult[], scope: SearchScope, fo
     const item = getAllowed(args.pageId);
     if (!item) return { error: "Document is outside the published search scope" };
     if (name === "read_document") {
+      await getPublishedPage(item.id, signal);
       const existing = readCache.get(item.id);
       if (existing !== undefined) return { ...item, text: existing, citation: [...sources.keys()].indexOf(item.id) + 1 };
       if (reads >= 5) return { error: "Document read limit reached" };
       reads++;
-      // This reader has no Notion session token and can only fetch public pages.
-      const notion = new NotionAPI({ apiBaseUrl: "https://app.notion.com/api/v3", ofetchOptions: { signal, timeout: 8_000, retry: 0 } });
-      const recordMap = await notion.getPage(item.id, { fetchCollections: false, fetchMissingBlocks: false, signFileUrls: false });
+      const recordMap = await getNotionPage(item.id, signal);
       signal.throwIfAborted();
       const blocks = recordMap.block || {};
       const byId = new Map(Object.entries(blocks).map(([id, entry]) => [compactNotionId(id), blockValue(entry)]));

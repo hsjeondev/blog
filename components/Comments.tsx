@@ -28,8 +28,7 @@ export default function Comments({ pageId }: CommentsProps) {
         try {
             const res = await fetch(`/api/comments/${pageId}`);
             const data = await res.json();
-            setComments(data.results);
-            console.log(data.results);
+            setComments(res.ok && Array.isArray(data.results) ? data.results : []);
         } catch (error) {
             console.error('Failed to fetch comments:', error);
         } finally {
@@ -131,7 +130,7 @@ export default function Comments({ pageId }: CommentsProps) {
                                 {comment.created_by.id == "b134fa0d-0a42-457c-be65-3fcc91bd5c0e" && (
                                     <div className="mt-3">
                                         <span className="text-gray-500 dark:text-gray-400">
-                                            태인 <IonIcon name="checkmark-circle" className="text-blue-500" style={{ position: 'relative', top: '2px' }} />
+                                            프리머그 <IonIcon name="checkmark-circle" className="text-blue-500" style={{ position: 'relative', top: '2px' }} />
                                         </span>
                                     </div>
                                 )}

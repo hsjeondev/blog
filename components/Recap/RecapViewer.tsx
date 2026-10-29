@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import IonIcon from "@reacticons/ionicons";
 import { AnimatePresence, LayoutGroup, motion, useMotionValue, useTransform, type MotionValue } from "framer-motion";
 import { NotionRenderer } from "../../packages/notionx";
-import { Code, Collection, Equation, Modal } from "../../utils/notion-components";
+import { Code, Collection, Equation, Modal, mapPublishedImageUrl } from "../../utils/notion-components";
 import { useDarkMode } from "../../hooks/useDarkMode";
 import SkyGradient from "./SkyGradient";
 import RecapCover from "./RecapCover";
@@ -475,6 +475,7 @@ function BodyContent({ slide, post, darkMode, direction, playing, narrationEnabl
         ) : (
           <NotionRenderer
             recordMap={post.recordMap!}
+            mapImageUrl={mapPublishedImageUrl}
             blockId={blockId}
             components={rendererComponents}
             fullPage={false}
@@ -1410,6 +1411,7 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
                       <div data-recap-copy-measure>
                         <NotionRenderer
                           recordMap={post.recordMap}
+                          mapImageUrl={mapPublishedImageUrl}
                           blockId={blockId}
                           components={rendererComponents}
                           fullPage={false}

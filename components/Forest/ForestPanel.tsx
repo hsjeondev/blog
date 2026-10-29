@@ -5,13 +5,12 @@ import { blockValue } from "../../utils/backlink-graph";
 import { forestPageIdFromHref } from "../../utils/forest-navigation";
 import { NotionRenderer } from "../../packages/notionx";
 import { useDarkMode } from "../../hooks/useDarkMode";
-import { Code, Collection, Equation, Modal } from "../../utils/notion-components";
+import { Code, Collection, Equation, Modal, mapPublishedImageUrl } from "../../utils/notion-components";
 import type { ForestDocument } from "../../utils/search/folders";
 import { Backlinks } from "../Backlinks";
 import Comments from "../Comments";
 
 const components = { Code, Collection, Equation, Modal };
-const cache = new Map<string, any>();
 const date = (value: string | number) => {
   const parsed = typeof value === "number" ? value : Date.parse(value);
   return Number.isFinite(parsed) ? new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium" }).format(new Date(parsed)) : "정보 없음";
@@ -39,10 +38,6 @@ export function ForestPanel({ document: doc, anchor, collapsed, mobileVisible, o
     }
   };
   useEffect(() => {
-    const cached = cache.get(doc.id);
-    if (cached && cached.expires > Date.now()) {
-      setRecordMap(cached.value); return;
-    }
     const controller = new AbortController();
     setError("");
     fetch(`/api/forest/${doc.id}`, { signal: controller.signal }).then(async (response) => {
@@ -50,8 +45,6 @@ export function ForestPanel({ document: doc, anchor, collapsed, mobileVisible, o
       return response.json();
     }).then((value) => {
       if (controller.signal.aborted) return;
-      cache.delete(doc.id); cache.set(doc.id, { value, expires: Date.now() + 5 * 60_000 });
-      if (cache.size > 24) cache.delete(cache.keys().next().value);
       setRecordMap(value);
     }).catch((reason) => { if (!controller.signal.aborted) setError(reason.message); });
     return () => controller.abort();
@@ -94,7 +87,7 @@ export function ForestPanel({ document: doc, anchor, collapsed, mobileVisible, o
               }
               if (onNavigate(link.href)) { event.preventDefault(); event.stopPropagation(); }
             }}>
-              <NotionRenderer recordMap={recordMap} components={components} fullPage={false} darkMode={darkMode} showTableOfContents={false} previewImages={!!recordMap.preview_images} />
+              <NotionRenderer recordMap={recordMap} mapImageUrl={mapPublishedImageUrl} components={components} fullPage={false} darkMode={darkMode} showTableOfContents={false} previewImages={!!recordMap.preview_images} />
             </div>
             <Backlinks currentId={doc.id} currentTitle={title} onNavigate={onNavigate} />
             <Comments pageId={doc.id} />

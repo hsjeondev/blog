@@ -1,7 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { fetchNotionBacklinks } from '../../utils/backlink-graph';
+import { noPublicationCache } from '../../utils/notion-server';
+import { isNotionNotFound } from '../../utils/get-notion-page';
+import { fetchNotionBacklinks } from '../../utils/notion-backlinks';
 
 export default async (req: NextApiRequest, res: NextApiResponse) => {
+  noPublicationCache(res);
   if (req.method !== 'POST') {
     return res.status(405).send({ error: 'method not allowed' });
   }
@@ -13,9 +16,9 @@ export default async (req: NextApiRequest, res: NextApiResponse) => {
 
   try {
     const results = await fetchNotionBacklinks(currentId);
-    res.setHeader('Cache-Control', 'public, s-maxage=60, max-age=60, stale-while-revalidate=60');
+
     res.status(200).json(results);
   } catch (error) {
-    res.status(502).json({ error: 'failed to fetch backlinks' });
+    res.status(isNotionNotFound(error) ? 404 : 502).json({ error: 'failed to fetch backlinks' });
   }
 };

@@ -1,41 +1,19 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { normalizeTitle } from 'notion-utils';
-
-export default async (req: NextApiRequest, res: NextApiResponse) => {
-  if (req.method !== 'POST') {
-    return res.status(405).send({ error: 'method not allowed' });
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { bookMetadata, getPublishedPage } from '../../utils/published-notion';
+import { noPublicationCache } from '../../utils/notion-server';
+import { isNotionNotFound } from '../../utils/get-notion-page';
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  noPublicationCache(res);
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' });
+  let block = req.body?.block?.value;
+  const visited = new Set<string>();
+  while (block?.id && !visited.has(block.id)) {
+    visited.add(block.id);
+    if (block.type === 'page') break;
+    block = req.body?.recordMap?.block?.[block.parent_id]?.value;
   }
-  res.setHeader('Cache-Control', 'public, s-maxage=60, max-age=60, stale-while-revalidate=60');
-
-  const { block, recordMap } = req.body;
-
-  // Notion API response format change fallback: un-nest extra 'value' wrapper
-  Object.keys(recordMap.block).forEach(key => {
-    const b = recordMap.block[key];
-    if (b && b.value && b.value.value && b.value.role) {
-      recordMap.block[key] = b.value;
-    }
-  });
-
-  let currentBlock = block.value;
-
-  while (currentBlock) {
-    if (currentBlock.type === 'page') {
-      const title = currentBlock.properties?.title?.[0]?.[0].toString();
-      const link = currentBlock.id + '#' + block.value.id.replaceAll('-', '');
-      return res.status(200).json({ title, link });
-    }
-
-    // 다음 parent block 찾기
-    const parentId = currentBlock.parent_id;
-    currentBlock = recordMap.block[parentId]?.value;
-
-
-    // parent block을 찾을 수 없는 경우 종료
-    if (!currentBlock) {
-      return res.status(404).json({ error: 'Root block not found' });
-    }
-  }
-
-  return res.status(404).json({ error: 'Collection block not found' });
-};
+  try {
+    const meta = bookMetadata(await getPublishedPage(block?.type === 'page' ? block.id : ''));
+    return res.json({ title: meta.title, link: meta.id });
+  } catch (error) { return res.status(isNotionNotFound(error) ? 404 : 502).json({ error: 'Document unavailable' }); }
+}

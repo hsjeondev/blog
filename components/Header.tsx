@@ -68,7 +68,7 @@ export const Header: React.FC = () => {
                         <IonIcon name="menu-outline" />
                     </button>
                     <Link href="/" className="no-underline text-inherit">
-                        <h3 className="text-sm m-0 font-black">태인의 Blog</h3>
+                        <h3 className="text-sm m-0 font-black">프리머그의 Blog</h3>
                     </Link>
                     <nav className="header-navigation" aria-label="주요 메뉴">
                         {navigation.map((item) => (

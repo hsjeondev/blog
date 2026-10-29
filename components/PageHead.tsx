@@ -18,12 +18,12 @@ export const PageHead: React.FC<any> = ({ title, description, pageId, image, url
       <meta name='robots' content='index,follow' />
       <meta property='og:type' content='website' />
 
-      <meta property='og:site_name' content="태인의 Blog" />
+      <meta property='og:site_name' content="프리머그의 Blog" />
       <meta property='twitter:domain' content="https://blog.yuntae.in" />
 
-      <meta name='description' content={"코드, 그리고 그 사이의 생각을 기록합니다."} />
-      <meta property='og:description' content={"코드, 그리고 그 사이의 생각을 기록합니다."} />
-      <meta name='twitter:description' content={"코드, 그리고 그 사이의 생각을 기록합니다."} />
+      <meta name='description' content={"책으로 쌓은 지식을 기록하고 연결합니다."} />
+      <meta property='og:description' content={"책으로 쌓은 지식을 기록하고 연결합니다."} />
+      <meta name='twitter:description' content={"책으로 쌓은 지식을 기록하고 연결합니다."} />
 
       {socialImageUrl ? (
         <>

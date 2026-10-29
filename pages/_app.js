@@ -25,7 +25,7 @@ export const currentPostContext = createContext({
 export default function App({ Component, pageProps }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [title, setTitle] = useState("태인의 Blog");
+  const [title, setTitle] = useState("프리머그의 Blog");
   const [postId, setPostId] = useState('');
 
   useEffect(() => {

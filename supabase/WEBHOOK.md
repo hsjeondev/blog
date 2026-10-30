@@ -16,6 +16,9 @@ blog 프로젝트의 Production 환경에 아래 값을 설정하고 재배포�
 Supabase 서버 키와 Notion 토큰은 Secret 유형으로 저장합니다. 관리용 `SUPABASE_ACCESS_TOKEN`을 Vercel에 넣지 않습니다.
 수신 주소를 브라우저로 열면 비밀값 없이 `databaseConfigured`, `signatureConfigured`를 확인할 수 있습니다.
 이 상태는 변수 설정 여부이며 실제 키의 유효성을 대신 검사하지는 않습니다.
+`missing`과 `invalid`에는 문제가 있는 변수 이름만 표시됩니다. 값은 반환하지 않습니다.
+변수가 설정되어 있는데도 실패하면 수신 주소에 `?check=database`를 붙여 서버 키로 읽기 전용 DB 접속을 확인할 수 있습니다.
+`databaseConnection.connected`가 false인 경우 HTTP 상태와 오류 코드만 반환합니다. 비밀 키와 원문 오류는 반환하지 않습니다.
 
 ## Notion 구독 생성과 확인
 

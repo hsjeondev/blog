@@ -18,7 +18,9 @@ function request(raw='',headers={},method='POST'){return Object.assign(Readable.
 function response(){return {headers:{},setHeader(k,v){this.headers[k]=v;},status(n){this.statusCode=n;return this;},json(value){this.body=value;return this;}};}
 async function fixture(run,jobs=[]){
   const env={...process.env},fetch=global.fetch,create=storage.createSyncStore,pace=pacing.withNotionPacing,f=upstream(),calls=[];
-  Object.assign(process.env,{NOTION_TOKEN:'fixture',NOTION_MYBOOKLIST_ID:database,NOTION_WEBHOOK_VERIFICATION_TOKEN:token});delete process.env.NOTION_API_KEY;delete process.env.NOTION_WEBHOOK_SUBSCRIPTION_ID;delete process.env.CRON_SECRET;
+  Object.assign(process.env,{NOTION_TOKEN:'fixture',NOTION_MYBOOKLIST_ID:database,NOTION_WEBHOOK_VERIFICATION_TOKEN:token,
+    NEXT_PUBLIC_SUPABASE_URL:'https://fixture.supabase.co',SUPABASE_SECRET_KEY:'fixture-server-key'});
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;delete process.env.NOTION_API_KEY;delete process.env.NOTION_WEBHOOK_SUBSCRIPTION_ID;delete process.env.CRON_SECRET;
   global.fetch=f.fetch;pacing.withNotionPacing=work=>work();
   const store={async call(name,args){calls.push({name,args:structuredClone(args)});if(name==='blog_sync_started_at')return '2026-10-30T00:00:00Z';if(name==='blog_claim_notion_event')return jobs.shift()||{status:'empty'};return true;}};
   storage.createSyncStore=()=>store;
@@ -97,4 +99,22 @@ test('manual recovery requires a server secret and resets failures only after au
   const bad=response();await retry(request('',{authorization:'Bearer wrong'}),bad);assert.equal(bad.statusCode,401);assert.equal(calls.length,0);
   const good=response();await retry(request('',{authorization:'Bearer '+token}),good);assert.equal(good.statusCode,200);
   assert.equal(calls[0].name,'blog_retry_failed_notion_events');
+}));
+test('configuration diagnostics identify missing or malformed variable names without returning their values',()=>fixture(async()=>{
+  delete process.env.SUPABASE_SECRET_KEY;
+  const missing=response();await handler(request('',{},'GET'),missing);
+  assert.equal(missing.body.databaseConfigured,false);
+  assert.deepEqual(missing.body.missing,['SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY']);
+  process.env.SUPABASE_SERVICE_ROLE_KEY='fixture-legacy-key';process.env.NOTION_MYBOOKLIST_ID='wrong-id';
+  const invalid=response();await handler(request('',{},'GET'),invalid);
+  assert.deepEqual(invalid.body.invalid,['NOTION_MYBOOKLIST_ID']);assert.equal(invalid.body.serverKeyVariable,'SUPABASE_SERVICE_ROLE_KEY');
+  assert.ok(!JSON.stringify(invalid.body).includes('fixture-legacy-key'));assert.ok(!JSON.stringify(invalid.body).includes('wrong-id'));
+}));
+test('optional database probe distinguishes credential failures from missing configuration without exposing errors',()=>fixture(async({store})=>{
+  const req=request('',{},'GET');req.query={check:'database'};
+  store.call=async()=>{throw Object.assign(new Error('private key must not be returned'),{status:401,code:'42501'});};
+  const res=response();await handler(req,res);
+  assert.equal(res.body.databaseConfigured,true);
+  assert.deepEqual(res.body.databaseConnection,{connected:false,httpStatus:401,code:'42501'});
+  assert.ok(!JSON.stringify(res.body).includes('private key'));
 }));

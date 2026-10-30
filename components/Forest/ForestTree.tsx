@@ -1,4 +1,4 @@
-import IonIcon from "@reacticons/ionicons";
+import IonIcon from "../Icon";
 import { useMemo } from "react";
 import { buildFolderTree, type ForestDocument, type FolderNode } from "../../utils/search/folders";
 import { sortedFolders, type ForestSort } from "../../utils/forest-navigation";

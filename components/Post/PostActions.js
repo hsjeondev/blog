@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import IonIcon from '@reacticons/ionicons';
+import IonIcon from "../Icon";
 
 const itemVariants = {
     hidden: { opacity: 0, y: 20 },

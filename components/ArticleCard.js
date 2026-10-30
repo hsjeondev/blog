@@ -82,7 +82,8 @@ export const ArticleCard = ({ post, onClick }) => {
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    backgroundImage: `url(${post.cover && (post.cover.file?.url || post.cover.external?.url || '')})`,
+                    backgroundImage: post.cover && (post.cover.file?.url || post.cover.external?.url)
+                        ? `url(${post.cover.file?.url || post.cover.external?.url})` : 'none',
                     backgroundSize: 'cover',
                     backgroundPosition: 'center center',
                     opacity: 0.1,

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import IonIcon from "@reacticons/ionicons";
+import IonIcon from "../Icon";
 import { AnimatePresence, LayoutGroup, motion, useMotionValue, useTransform, type MotionValue } from "framer-motion";
 import { NotionRenderer } from "../../packages/notionx";
 import { Code, Collection, Equation, Modal, mapPublishedImageUrl } from "../../utils/notion-components";

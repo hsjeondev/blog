@@ -1,8 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence } from "framer-motion";
-import { Search } from "../Search";
+import dynamic from 'next/dynamic';
 import type { SearchOptions } from "../../utils/search/types";
+
+const Search = dynamic(() => import('../Search').then(module => module.Search), { ssr: false });
 
 const SearchContext = createContext<(options?: SearchOptions) => void>(() => {});
 export const useSearch = () => useContext(SearchContext);

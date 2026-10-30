@@ -30,6 +30,7 @@ export default function Document() {
     <Html lang="ko">
       <Head>
         <meta name="color-scheme" content="light dark" />
+        <link rel="preconnect" href="https://hangeul.pstatic.net" crossOrigin="anonymous" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </Head>
       <body>

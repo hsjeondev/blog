@@ -1,4 +1,4 @@
-import IonIcon from "@reacticons/ionicons";
+import IonIcon from "../Icon";
 import { useEffect, useRef, useState } from "react";
 import { getPageTitle } from "notion-utils";
 import { blockValue } from "../../utils/backlink-graph";

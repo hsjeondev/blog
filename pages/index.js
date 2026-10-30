@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArticleCard } from '../components/ArticleCard';
 import { publishedBooks } from "../utils/published-notion";
 import { noPublicationCache } from "../utils/notion-server";
-import IonIcon from "@reacticons/ionicons";
+import IonIcon from "../components/Icon";
 import { useRouter } from 'next/router';
 import { useEffect } from 'react';
 
@@ -38,7 +38,7 @@ export default function Home({ list, loadError }) {
 
   return (
     <motion.main
-      initial={{ opacity: 0 }}
+      initial={false}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="container mx-auto px-4 py-8"

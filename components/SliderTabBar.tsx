@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
-import IonIcon from '@reacticons/ionicons'
+import IonIcon from "./Icon"
 
 const tabs = [
     { id: 'diary', label: '일지', path: '/forest' },

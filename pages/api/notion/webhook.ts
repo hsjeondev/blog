@@ -1,9 +1,26 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { bookDatabaseId, noPublicationCache } from '../../../utils/notion-server';
+import { bookDatabaseId, notionId, noPublicationCache } from '../../../utils/notion-server';
 import { createSyncStore } from '../../../utils/sync/supabase-store';
 import { drainNotionEvents, normalizedNotionEvent, validNotionSignature } from '../../../utils/sync/notion-webhook';
 
 const MAX_BODY = 256 * 1024;
+function configurationDetails() {
+  const missing: string[] = [], invalid: string[] = [];
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL');
+  else {
+    try {
+      const url = new URL(supabaseUrl);
+      if (!['http:', 'https:'].includes(url.protocol)) invalid.push('NEXT_PUBLIC_SUPABASE_URL');
+    } catch { invalid.push('NEXT_PUBLIC_SUPABASE_URL'); }
+  }
+  const serverKey = process.env.SUPABASE_SECRET_KEY?.trim() ? 'SUPABASE_SECRET_KEY'
+    : process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ? 'SUPABASE_SERVICE_ROLE_KEY' : null;
+  if (!serverKey) missing.push('SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY');
+  if (!process.env.NOTION_MYBOOKLIST_ID?.trim()) missing.push('NOTION_MYBOOKLIST_ID');
+  else if (!notionId(process.env.NOTION_MYBOOKLIST_ID.trim())) invalid.push('NOTION_MYBOOKLIST_ID');
+  return { missing, invalid, serverKeyVariable: serverKey };
+}
 function readRaw(req: NextApiRequest) {
   return new Promise<Buffer>((resolve, reject) => {
     const parts: Buffer[] = [];
@@ -25,11 +42,24 @@ function readRaw(req: NextApiRequest) {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   noPublicationCache(res);
   const token = process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN?.trim() || '';
+  const details = configurationDetails();
   let databaseReady = false;
-  try { createSyncStore(); bookDatabaseId(); databaseReady = true; } catch {}
-  if (req.method === 'GET') return res.status(200).json({ databaseConfigured: databaseReady, signatureConfigured: !!token });
+  try { createSyncStore(); bookDatabaseId(); databaseReady = details.missing.length === 0 && details.invalid.length === 0; } catch {}
+  if (req.method === 'GET') {
+    let databaseConnection: { connected: boolean; httpStatus?: number; code?: string } | undefined;
+    if (databaseReady && req.query?.check === 'database') {
+      try {
+        await createSyncStore().call('blog_sync_started_at', {}, AbortSignal.timeout(5000));
+        databaseConnection = { connected: true };
+      } catch (error) {
+        databaseConnection = { connected: false, httpStatus: error.status,
+          code: typeof error.code === 'string' && /^[a-z0-9_]{1,40}$/i.test(error.code) ? error.code : 'CONNECTION_FAILED' };
+      }
+    }
+    return res.status(200).json({ databaseConfigured: databaseReady, signatureConfigured: !!token, ...details, ...(databaseConnection ? { databaseConnection } : {}) });
+  }
   if (req.method !== 'POST') { res.setHeader('Allow', 'GET, POST'); return res.status(405).json({ error: 'Method not allowed' }); }
-  if (!databaseReady) return res.status(503).json({ error: 'Webhook database configuration required' });
+  if (!databaseReady) return res.status(503).json({ error: 'Webhook database configuration required', ...details });
   if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return res.status(415).json({ error: 'JSON required' });
   try {
     const raw = await readRaw(req);

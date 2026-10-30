@@ -20,6 +20,6 @@ export function mergeGraphBatch(previous: GraphData, batch: GraphBatch): GraphDa
 
 export function adjacentGraph(graph: GraphData, currentId: string): GraphData {
   const links = graph.links.filter(link => link.kind === 'reference' && (link.source === currentId || link.target === currentId));
-  const neighbors = new Set(links.flatMap(link => [link.source, link.target]));
+  const neighbors = new Set([currentId, ...links.flatMap(link => [link.source, link.target])]);
   return { nodes: graph.nodes.filter(node => neighbors.has(node.id)).map(node => node.id === currentId ? { ...node, kind: 'current' } : node), links };
 }

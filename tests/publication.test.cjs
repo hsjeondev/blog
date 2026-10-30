@@ -269,3 +269,10 @@ test('graph API cancels upstream reads on disconnect and rejects invalid cursors
   assert.equal(aborted,true);assert.equal(res.body,undefined);
   assert.equal(req.listenerCount('aborted'),0);assert.equal(res.listenerCount('close'),0);
 }));
+
+test('an isolated book keeps its own node while unrelated books and membership links stay out',()=>{
+  const current={id:published,title:'현재 책',href:'/'+published,kind:'post',group:'post'};
+  const graph={nodes:[current,{id:target,title:'다른 책',href:'/'+target,kind:'post'},{id:'group:post',title:'포스팅',href:'/',kind:'group'}],links:[{source:'group:post',target:published,kind:'membership'}]};
+  assert.deepEqual(adjacentGraph(graph,published),{nodes:[{...current,kind:'current'}],links:[]});
+  assert.deepEqual(adjacentGraph(graph,hidden),{nodes:[],links:[]});
+});

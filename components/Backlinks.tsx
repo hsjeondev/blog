@@ -14,10 +14,8 @@ interface BacklinksProps {
 }
 
 export const Backlinks: React.FC<BacklinksProps> = ({ currentId, onNavigate }) => {
-  const [requestedId, setRequestedId] = React.useState<string | null>(null);
   const [attempt, setAttempt] = React.useState(0);
-  const requested = requestedId === currentId;
-  const { graph: allConnections, loading, error, processed, total } = useConnectionGraph(requested, currentId, attempt);
+  const { graph: allConnections, loading, error, processed, total } = useConnectionGraph(true, currentId, attempt);
   const graph = React.useMemo(() => adjacentGraph(allConnections, currentId), [allConnections, currentId]);
   const neighbors = Math.max(0, graph.nodes.length - 1);
   const incoming = graph.links.filter(link => link.target === currentId).length;
@@ -28,8 +26,8 @@ export const Backlinks: React.FC<BacklinksProps> = ({ currentId, onNavigate }) =
       <div className="backlink-graph-heading">
         <div>
           <b id={`backlink-title-${compactNotionId(currentId)}`}>이 기록과 연결된 책</b>
-          <small>{!requested ? 'Notion 페이지 댓글의 @책 멘션으로 연결합니다.' : loading ? `연결을 확인하고 있습니다… ${total ? `${processed}/${total}` : ''}` : error ? error : neighbors ? `${neighbors}권 · 이 책에서 연결 ${outgoing}개 · 이 책을 가리키는 연결 ${incoming}개` : "아직 연결된 책이 없습니다."}</small>
-          {(!requested || error) && <button type="button" onClick={() => { setRequestedId(currentId); setAttempt(value => value + 1); }}>연결된 기록 확인</button>}
+          <small>{loading || (!error && !graph.nodes.length) ? `연결을 확인하고 있습니다… ${total ? `${processed}/${total}` : ''}` : error ? error : neighbors ? `${neighbors}권 · 이 책에서 연결 ${outgoing}개 · 이 책을 가리키는 연결 ${incoming}개` : "아직 연결된 책이 없습니다."}</small>
+          {error && <button type="button" onClick={() => setAttempt(value => value + 1)}>다시 시도</button>}
         </div>
         <Link href={`/graph?focus=${encodeURIComponent(currentId)}`} className="no-underline">
           <motion.button
@@ -45,7 +43,7 @@ export const Backlinks: React.FC<BacklinksProps> = ({ currentId, onNavigate }) =
 
         </Link>
       </div>
-      {requested && !!graph.links.length && <KnowledgeGraph data={graph} activeId={currentId} variant="compact" onNavigate={onNavigate} />}
+      {!!graph.nodes.length && <KnowledgeGraph data={graph} activeId={currentId} variant="compact" onNavigate={onNavigate} />}
     </section>
   );
 };

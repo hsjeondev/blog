@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "sync:notion": "node scripts/sync-notion.cjs"
   },
   "dependencies": {
     "@fisch0920/medium-zoom": "^1.0.7",

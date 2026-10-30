@@ -1,7 +1,6 @@
 import { NotionRenderer } from '../packages/notionx'
 import 'katex/dist/katex.min.css'
 import { useEffect, useRef } from 'react'
-import Comments from '../components/Comments'
 import { Backlinks } from '../components/Backlinks'
 import { PageHead } from '../components/PageHead'
 import { motion } from 'framer-motion';
@@ -148,9 +147,6 @@ export default function Page({ pageId, recordMap, summary }) {
 
                 <motion.div variants={itemVariants}>
                     <Backlinks currentId={pageId} currentTitle={title} />
-                </motion.div>
-                <motion.div variants={itemVariants}>
-                    <Comments pageId={pageId} />
                 </motion.div>
             </div>
         </motion.main>

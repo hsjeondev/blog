@@ -31,8 +31,8 @@ export async function getPublishedPage(pageId: string, signal?: AbortSignal) {
   return page;
 }
 
-export async function publishedBooks() {
-  return (await getDatabase()).results.map(bookMetadata).sort((a, b) =>
+export async function publishedBooks(signal?: AbortSignal) {
+  return (await getDatabase(undefined, undefined, signal)).results.map(bookMetadata).sort((a, b) =>
     Date.parse(b.date) - Date.parse(a.date)
     || Date.parse(b.createdTime) - Date.parse(a.createdTime)
     || a.id.localeCompare(b.id));

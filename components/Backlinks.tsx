@@ -1,8 +1,10 @@
 import * as React from "react";
 import Link from "next/link";
 import IonIcon from "./Icon";
-import { KnowledgeGraph, type GraphData } from "./Graph/KnowledgeGraph";
-import { compactNotionId, resolveBacklinkSources } from "../utils/backlink-graph";
+import { KnowledgeGraph } from "./Graph/KnowledgeGraph";
+import { compactNotionId } from "../utils/backlink-graph";
+import { adjacentGraph } from "../utils/connection-graph";
+import { useConnectionGraph } from "../hooks/useConnectionGraph";
 import { motion } from "framer-motion";
 
 interface BacklinksProps {
@@ -11,51 +13,23 @@ interface BacklinksProps {
   onNavigate?: (href: string, title?: string) => boolean;
 }
 
-export const Backlinks: React.FC<BacklinksProps> = ({ currentId, currentTitle = "현재 문서", onNavigate }) => {
-  const [sources, setSources] = React.useState<ReturnType<typeof resolveBacklinkSources>>([]);
+export const Backlinks: React.FC<BacklinksProps> = ({ currentId, onNavigate }) => {
   const [requestedId, setRequestedId] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState(false);
   const [attempt, setAttempt] = React.useState(0);
-
-  React.useEffect(() => {
-    if (requestedId !== currentId) return;
-    const controller = new AbortController();
-    setSources([]);
-    setLoading(true);
-    setError(false);
-    fetch("/api/backlink", {
-      method: "POST",
-      body: JSON.stringify({ currentId }),
-      headers: { "Content-Type": "application/json" },
-      signal: controller.signal,
-    })
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error("backlink request failed")))
-      .then((payload) => setSources(resolveBacklinkSources(payload).filter(
-        (source) => compactNotionId(source.id) !== compactNotionId(currentId),
-      )))
-      .catch((error) => {
-        if (error.name !== "AbortError") { setSources([]); setError(true); }
-      })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [currentId, requestedId, attempt]);
-
-  const graph = React.useMemo<GraphData>(() => ({
-    nodes: [
-      { id: currentId, title: currentTitle, href: `/${currentId}`, kind: "current" },
-      ...sources.map((source) => ({ ...source, kind: "reference" as const })),
-    ],
-    links: sources.map((source) => ({ source: source.id, target: currentId })),
-  }), [currentId, currentTitle, sources]);
+  const requested = requestedId === currentId;
+  const { graph: allConnections, loading, error, processed, total } = useConnectionGraph(requested, currentId, attempt);
+  const graph = React.useMemo(() => adjacentGraph(allConnections, currentId), [allConnections, currentId]);
+  const neighbors = Math.max(0, graph.nodes.length - 1);
+  const incoming = graph.links.filter(link => link.target === currentId).length;
+  const outgoing = graph.links.filter(link => link.source === currentId).length;
 
   return (
     <section className="backlink-graph" aria-labelledby={`backlink-title-${compactNotionId(currentId)}`}>
       <div className="backlink-graph-heading">
         <div>
-          <b id={`backlink-title-${compactNotionId(currentId)}`}>이 문서를 가리키는 연결</b>
-          <small>{requestedId !== currentId ? '필요할 때 연결된 기록을 확인할 수 있습니다.' : loading ? '연결된 기록을 확인하고 있습니다…' : error ? '연결을 불러오지 못했습니다.' : sources.length ? `${sources.length}개의 문서가 연결되어 있습니다.` : "아직 연결된 문서가 없습니다."}</small>
-          {(requestedId !== currentId || error) && <button type="button" onClick={() => { setSources([]); setError(false); setRequestedId(currentId); setAttempt(value => value + 1); }}>연결된 기록 확인</button>}
+          <b id={`backlink-title-${compactNotionId(currentId)}`}>이 기록과 연결된 책</b>
+          <small>{!requested ? 'Notion 페이지 댓글의 @책 멘션으로 연결합니다.' : loading ? `연결을 확인하고 있습니다… ${total ? `${processed}/${total}` : ''}` : error ? error : neighbors ? `${neighbors}권 · 이 책에서 연결 ${outgoing}개 · 이 책을 가리키는 연결 ${incoming}개` : "아직 연결된 책이 없습니다."}</small>
+          {(!requested || error) && <button type="button" onClick={() => { setRequestedId(currentId); setAttempt(value => value + 1); }}>연결된 기록 확인</button>}
         </div>
         <Link href={`/graph?focus=${encodeURIComponent(currentId)}`} className="no-underline">
           <motion.button
@@ -71,7 +45,7 @@ export const Backlinks: React.FC<BacklinksProps> = ({ currentId, currentTitle = 
 
         </Link>
       </div>
-      {requestedId === currentId && !!sources.length && <KnowledgeGraph data={graph} activeId={currentId} variant="compact" onNavigate={onNavigate} />}
+      {requested && !!graph.links.length && <KnowledgeGraph data={graph} activeId={currentId} variant="compact" onNavigate={onNavigate} />}
     </section>
   );
 };

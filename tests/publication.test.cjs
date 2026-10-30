@@ -1,4 +1,5 @@
 const { test } = require('node:test');
+const { EventEmitter } = require('node:events');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -17,6 +18,7 @@ const { publishedBooks } = require('../utils/published-notion.ts');
 const { searchContent } = require('../utils/search/search-service.ts');
 const { buildGraphData } = require('../utils/build-graph-data.ts');
 const { fetchNotionBacklinks } = require('../utils/notion-backlinks.ts');
+const { mergeGraphBatch, adjacentGraph } = require('../utils/connection-graph.ts');
 const { database, ids, upstream } = require('./fixtures/notion-api.cjs');
 const [published, hidden, target, text, image, nested, row, table, child, linked, synced] = ids;
 async function withFixture(run) {
@@ -181,4 +183,93 @@ test('graph contains only published links and retains category membership nodes'
 test('backlinks contain referring published documents, never category membership hubs',()=>withFixture(async()=>{
   assert.deepEqual((await fetchNotionBacklinks(published)).sources, []);
   assert.deepEqual((await fetchNotionBacklinks(target)).sources.map(source=>source.id), [published]);
+}));
+
+test('comment graph never reads bodies or exposes comment text, authors or private targets',()=>withFixture(async f=>{
+  const graph=await buildGraphData();
+  assert.ok(graph.links.some(e=>e.source===published&&e.target===target&&e.kind==='reference'));
+  assert.ok(f.calls.every(c=>!c.path.startsWith('/v1/blocks/')&&!c.path.startsWith('/v1/pages/')));
+  assert.equal(f.calls.filter(c=>c.path==='/v1/comments').length,2);
+  for(const secret of ['PRIVATE_COMMENT_TEXT','PRIVATE_COMMENT_AUTHOR','PRIVATE_TITLE',hidden]) assert.ok(!JSON.stringify(graph).includes(secret));
+  // Body mentions still exist, but deleting the comment removes the graph edge.
+  f.comments.set(published,[]);
+  assert.equal((await buildGraphData()).links.filter(e=>e.kind==='reference').length,0);
+}));
+
+test('comment references paginate and accept only distinct published page mentions on the page',()=>withFixture(async f=>{
+  const original=f.fetch;
+  global.fetch=async(url,init)=>{
+    const u=new URL(url);
+    if(u.pathname!=='/v1/comments'||u.searchParams.get('block_id')!==published)return original(url,init);
+    if(!u.searchParams.has('start_cursor'))return Response.json({results:f.comments.get(published),has_more:true,next_cursor:'next-comments'});
+    return Response.json({results:[
+      {parent:{page_id:published},rich_text:[{type:'mention',mention:{page:{id:target.replaceAll('-','')}}},{type:'mention',mention:{page:{id:published}}},{type:'text',plain_text:'@book',href:'https://notion.so/'+hidden}]},
+      {parent:{block_id:text},rich_text:[{type:'mention',mention:{page:{id:published}}}]},
+    ],has_more:false});
+  };
+  const graph=await buildGraphData();
+  assert.deepEqual(graph.links.filter(e=>e.kind==='reference'),[{source:published,target,kind:'reference'}]);
+}));
+
+test('graph batches stay bounded, merge in both directions and remove revoked nodes and edges',()=>withFixture(async f=>{
+  for(let i=0;i<7;i++)f.pages.push({...structuredClone(f.pages[2]),id:ids[i+3]});
+  let cursor='',graph={nodes:[],links:[]},steps=0;
+  do {
+    const before=f.calls.length;
+    const batch=await buildGraphData(undefined,{cursor,focus:target});
+    assert.ok(f.calls.slice(before).filter(c=>c.path==='/v1/comments').length<=4);
+    graph=mergeGraphBatch(graph,batch);cursor=batch.nextCursor||'';steps++;
+  } while(cursor);
+  assert.equal(steps,3);
+  for(const current of [published,target])assert.equal(adjacentGraph(graph,current).links.length,1);
+  const first=await buildGraphData(undefined,{cursor:'',focus:target});
+  f.pages[0].properties.공개.checkbox=false;
+  const restart=await buildGraphData(undefined,{cursor:first.nextCursor,focus:target});
+  assert.equal(restart.reset,true);
+  graph=mergeGraphBatch(graph,restart);
+  assert.ok(!graph.nodes.some(n=>n.id===published));
+  assert.ok(!graph.links.some(e=>e.source===published||e.target===published));
+}));
+
+test('revocation during comment reads filters links, and comment permission failures are not empty success',()=>withFixture(async f=>{
+  const original=f.fetch;
+  global.fetch=async(url,init)=>{
+    const result=await original(url,init);
+    if(new URL(url).pathname==='/v1/comments')f.pages[2].properties.공개.checkbox=false;
+    return result;
+  };
+  const graph=await buildGraphData();
+  assert.ok(!graph.nodes.some(n=>n.id===target));
+  assert.equal(graph.links.filter(e=>e.kind==='reference').length,0);
+  global.fetch=async(url,init)=>new URL(url).pathname==='/v1/comments'?Response.json({code:'restricted_resource'},{status:403}):original(url,init);
+  await assert.rejects(buildGraphData(),error=>error.status===403);
+}));
+
+test('public comment API is disabled for published pages and never reads or writes Notion comments',()=>withFixture(async f=>{
+  const handler=require('../pages/api/comments/[id].ts').default;
+  for(const method of ['GET','POST']){
+    const res=response();await handler({method,query:{id:published},body:{content:'do not publish'}},res);
+    assert.equal(res.statusCode,404);assert.match(res.headers['Cache-Control'],/no-store/);
+  }
+  assert.equal(f.calls.length,0);
+}));
+
+test('graph API cancels upstream reads on disconnect and rejects invalid cursors',()=>withFixture(async f=>{
+  const handler=require('../pages/api/graph.ts').default;
+  let res=response();
+  await handler({method:'GET',query:{cursor:'invalid'}},res);
+  assert.equal(res.statusCode,400);
+  let started;
+  const pending=new Promise(resolve=>{started=resolve;});
+  let aborted=false;
+  global.fetch=async(_url,init)=>new Promise((_resolve,reject)=>{
+    init.signal.addEventListener('abort',()=>{aborted=true;reject(init.signal.reason);},{once:true});
+    started();
+  });
+  const req=Object.assign(new EventEmitter(),{method:'GET',query:{}});
+  res=Object.assign(new EventEmitter(),response());
+  const run=handler(req,res);
+  await pending;req.emit('aborted');await run;
+  assert.equal(aborted,true);assert.equal(res.body,undefined);
+  assert.equal(req.listenerCount('aborted'),0);assert.equal(res.listenerCount('close'),0);
 }));

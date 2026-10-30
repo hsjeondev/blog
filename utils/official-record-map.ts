@@ -66,6 +66,7 @@ export async function officialRecordMap(page: any, catalog: ReturnType<typeof bo
   });
   let visitedCount = 0;
   const visited = new Set<string>();
+  const pending = [{ parentId: meta.id, depth: 0 }];
   const children = async (parentId: string, depth: number): Promise<string[]> => {
     if (depth > 100) throw new Error('Notion document nesting limit exceeded');
     const result: string[] = [];
@@ -119,14 +120,21 @@ export async function officialRecordMap(page: any, catalog: ReturnType<typeof bo
         if (!supported.has(value.type)) { value.type = 'text'; value.properties = { title: [['이 콘텐츠는 아직 표시할 수 없습니다.']] }; descend = false; }
         map.block[id] = entry(value);
         result.push(id);
-        if (descend) value.content = await children(id, depth + 1);
+        if (descend) pending.push({ parentId: id, depth: depth + 1 });
       }
       cursor = data.has_more ? data.next_cursor : undefined;
       if (data.has_more && !cursor) throw new Error('Incomplete Notion block pagination');
     } while (cursor);
     return result;
   };
-  map.block[meta.id].value.content = await children(meta.id, 0);
+  // Read sibling subtrees together, with at most two block requests in flight.
+  // Each parent's pagination and content array retain their original order.
+  while (pending.length) {
+    const batch = pending.splice(0, 2);
+    await Promise.all(batch.map(async ({ parentId, depth }) => {
+      map.block[parentId].value.content = await children(parentId, depth);
+    }));
+  }
   // IDs here are drawn exclusively from the public catalog, for graph/search use.
   map.published_references = [...references];
   return JSON.parse(JSON.stringify(map));

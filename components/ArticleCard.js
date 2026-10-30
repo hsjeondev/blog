@@ -1,13 +1,12 @@
-import { motion, useAnimation } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useState, useContext } from 'react';
 import { currentPostContext } from '../pages/_app';
 
 export const ArticleCard = ({ post, onClick }) => {
-    const controls = useAnimation();
     const [isAnimating, setIsAnimating] = useState(false);
     const { setTitle, setPostId } = useContext(currentPostContext);
 
-    const handleClick = (e) => {
+    const handleClick = async (e) => {
         e.preventDefault();
         if (isAnimating) return;
         const articleTitle = post.title;
@@ -16,9 +15,12 @@ export const ArticleCard = ({ post, onClick }) => {
             setPostId(post.id);
         }
         setIsAnimating(true);
-        setTimeout(() => {
-            if (onClick) onClick();
-        }, 700);
+        try {
+            const navigated = await onClick?.();
+            if (!onClick || navigated === false) setIsAnimating(false);
+        } catch {
+            setIsAnimating(false);
+        }
     };
 
     if (isAnimating) {

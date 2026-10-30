@@ -12,8 +12,8 @@ export function normalizeNotionRecordMap(recordMap: any, pageId: string) {
   return recordMap;
 }
 export async function getNotionPage(pageId: string, signal?: AbortSignal) {
-  const page = await getPublishedPage(pageId, signal);
-  const recordMap = await officialRecordMap(page, await publishedBooks(), signal);
+  const [page, catalog] = await Promise.all([getPublishedPage(pageId, signal), publishedBooks()]);
+  const recordMap = await officialRecordMap(page, catalog, signal);
   await getPublishedPage(pageId, signal);
   return recordMap;
 }

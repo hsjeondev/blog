@@ -1,4 +1,5 @@
 import { fetchNotionJson } from './notion-fetch';
+import { paceNotionRequest } from './sync/notion-pacing';
 
 export function notionId(value: unknown): string {
   if (typeof value !== 'string') return '';
@@ -24,6 +25,8 @@ export function notPublished() {
 }
 
 export async function notionRequest(path: string, body?: any, signal?: AbortSignal) {
+  const paced = paceNotionRequest(signal);
+  if (paced) await paced;
   return fetchNotionJson('https://api.notion.com/v1/' + path, {
     method: body === undefined ? 'GET' : 'POST',
     headers: { Authorization: 'Bearer ' + notionToken(), 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json' },

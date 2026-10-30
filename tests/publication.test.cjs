@@ -39,6 +39,25 @@ test('book query enforces publication, database membership and pagination even w
   await getDatabase();assert.equal(batches,2);
 }));
 
+test('published books sort by displayed writing date across batches with creation-date fallback',()=>withFixture(async f=>{
+  const newest=structuredClone(f.pages[0]);
+  newest.created_time='2024-01-01T00:00:00Z';
+  newest.properties.작성일={type:'date',date:{start:'2026-10-29'}};
+  const fallback=structuredClone(f.pages[2]);
+  fallback.created_time='2026-10-28T12:00:00Z';
+  fallback.last_edited_time='2026-10-30T00:00:00Z';
+  const oldest=structuredClone(f.pages[0]);
+  oldest.id=text;
+  oldest.created_time='2026-10-30T00:00:00Z';
+  oldest.properties.작성일={type:'date',date:{start:'2026-10-20'}};
+  global.fetch=async(_url,init)=>JSON.parse(init.body).start_cursor
+    ? Response.json({results:[newest],has_more:false})
+    : Response.json({results:[oldest,fallback],has_more:true,next_cursor:'next'});
+  const books=await publishedBooks();
+  assert.deepEqual(books.map(book=>book.id),[published,target,text]);
+  assert.deepEqual(books.map(book=>book.date),['2026-10-29','2026-10-28T12:00:00Z','2026-10-20']);
+}));
+
 test('official renderer adapter paginates nested blocks and excludes private mentions, child pages and foreign synced content',()=>withFixture(async f=>{
   const map=await getNotionPage(published);
   assert.equal(map.block[published].value.blog_metadata.title,'공개 책');

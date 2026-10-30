@@ -71,6 +71,58 @@ test('official renderer adapter paginates nested blocks and excludes private men
   assert.ok(!f.calls.some(call=>call.path.includes('/users/')));
 }));
 
+test('publication and catalog requests overlap, but body reads wait for publication approval',{timeout:2000},()=>withFixture(async f=>{
+  const fetch=f.fetch;
+  let releasePage;
+  const catalogStarted=new Promise(resolve=>{releasePage=resolve;});
+  let pageApproved=false;
+  global.fetch=async(url,init)=>{
+    const path=new URL(url).pathname;
+    if(path==='/v1/databases/'+database+'/query') releasePage();
+    if(path==='/v1/pages/'+published) {
+      await catalogStarted;
+      const result=await fetch(url,init);
+      pageApproved=true;
+      return result;
+    }
+    if(path.startsWith('/v1/blocks/')) assert.equal(pageApproved,true);
+    return fetch(url,init);
+  };
+  await getNotionPage(published);
+}));
+
+test('sibling block reads overlap without changing content order or exceeding two in flight',{timeout:2000},()=>withFixture(async f=>{
+  const fetch=f.fetch;
+  let releaseText;
+  const tableStarted=new Promise(resolve=>{releaseText=resolve;});
+  let active=0,peak=0;
+  global.fetch=async(url,init)=>{
+    const path=new URL(url).pathname;
+    if(!path.startsWith('/v1/blocks/')) return fetch(url,init);
+    peak=Math.max(peak,++active);
+    try {
+      if(path==='/v1/blocks/'+text+'/children') await tableStarted;
+      if(path==='/v1/blocks/'+table+'/children') releaseText();
+      return await fetch(url,init);
+    } finally {active--;}
+  };
+  const map=await getNotionPage(published);
+  assert.equal(peak,2);
+  assert.deepEqual(map.block[published].value.content,[text,table,image]);
+  assert.deepEqual(map.block[text].value.content,[nested]);
+  assert.deepEqual(map.block[table].value.content,[row]);
+}));
+
+test('unpublishing while the body loads still prevents the detail response',()=>withFixture(async f=>{
+  const fetch=f.fetch;
+  global.fetch=async(url,init)=>{
+    const result=await fetch(url,init);
+    if(new URL(url).pathname.startsWith('/v1/blocks/')) f.pages[0].properties.공개.checkbox=false;
+    return result;
+  };
+  await assert.rejects(getNotionPage(published),e=>e.status===404);
+}));
+
 test('private, archived, missing-public-property and foreign-database records are rejected before body reads',()=>withFixture(async f=>{
   for(const variant of [false,'missing','archived','foreign']) {
     const p=f.pages[0];p.properties.공개={type:'checkbox',checkbox:true};p.archived=false;p.parent.database_id=database;

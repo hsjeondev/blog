@@ -13,7 +13,7 @@ function upstream() {
   const fetch = async (url, init={}) => {
     const u=new URL(url);assert.equal(u.hostname,'api.notion.com');
     calls.push({path:u.pathname,search:u.search,body:init.body ? JSON.parse(init.body) : undefined,init});
-    if(u.pathname==='/v1/databases/'+database+'/query') return Response.json({results:pages.filter(p=>p.properties.공개.checkbox),has_more:false});
+    if(u.pathname==='/v1/databases/'+database+'/query') return Response.json({results:pages.filter(p=>p.properties.공개?.checkbox),has_more:false});
     if(u.pathname.startsWith('/v1/pages/')) {
       const p=pages.find(p=>p.id===u.pathname.split('/').pop());return p ? Response.json(p) : Response.json({code:'object_not_found'},{status:404});
     }

@@ -4,19 +4,17 @@ import { useRouter } from "next/router";
 import { PageHead } from "../../components/PageHead";
 import { KnowledgeGraph, type GraphData } from "../../components/Graph/KnowledgeGraph";
 import { compactNotionId } from "../../utils/backlink-graph";
-
-const EMPTY_GRAPH: GraphData = { nodes: [], links: [] };
+import { useConnectionGraph } from "../../hooks/useConnectionGraph";
 
 export default function GraphPage() {
   const router = useRouter();
-  const [graph, setGraph] = React.useState<GraphData>(EMPTY_GRAPH);
   const [query, setQuery] = React.useState("");
   const [appliedQuery, setAppliedQuery] = React.useState("");
   const [searchOpen, setSearchOpen] = React.useState(false);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState("");
+  const [attempt, setAttempt] = React.useState(0);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const focusedId = typeof router.query.focus === "string" ? router.query.focus : undefined;
+  const { graph, loading, error, processed, total } = useConnectionGraph(router.isReady, focusedId, attempt);
 
   React.useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
@@ -26,20 +24,6 @@ export default function GraphPage() {
     const timeout = window.setTimeout(() => setAppliedQuery(query), 180);
     return () => window.clearTimeout(timeout);
   }, [query]);
-
-  React.useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/graph", { signal: controller.signal })
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error("그래프를 불러오지 못했습니다.")))
-      .then((data) => setGraph({ nodes: data.nodes || [], links: data.links || [] }))
-      .catch((fetchError) => {
-        if (fetchError.name !== "AbortError") setError(fetchError.message);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, []);
 
   const visibleGraph = React.useMemo<GraphData>(() => {
     const normalized = appliedQuery.trim().toLocaleLowerCase("ko-KR");
@@ -110,8 +94,8 @@ export default function GraphPage() {
           <span><i className="is-recap" />월말결산</span>
           <span><i className="is-document" />문서</span>
         </div>
-        {loading && <p className="graph-state">연결을 정리하고 있습니다…</p>}
-        {error && <p className="graph-state is-error">{error}</p>}
+        {loading && <p className="graph-state">댓글의 연결을 확인하고 있습니다… {total > 0 && `${processed}/${total}`}</p>}
+        {error && <p className="graph-state is-error">{error} <button type="button" onClick={() => setAttempt(value => value + 1)}>다시 시도</button></p>}
         {!loading && !error && !visibleGraph.nodes.length && <p className="graph-state">일치하는 문서가 없습니다.</p>}
         {!!visibleGraph.nodes.length && <KnowledgeGraph data={visibleGraph} activeId={focusedId} variant="full" />}
       </section>

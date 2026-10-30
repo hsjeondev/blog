@@ -9,11 +9,17 @@ const rt = (text) => ({type:'text',plain_text:text,text:{content:text},annotatio
 function upstream() {
   const pages = [page(published,true,'공개 책'),page(hidden,false,'PRIVATE_TITLE'),page(target,true,'연결 책')];
   const calls=[];
+  const comments = new Map([[published, [{ object:'comment', id:'comment', parent:{type:'page_id',page_id:published},
+    created_by:{id:'PRIVATE_COMMENT_AUTHOR'}, rich_text:[rt('PRIVATE_COMMENT_TEXT'),
+      {type:'mention',mention:{page:{id:target}},plain_text:'연결 책'},
+      {type:'mention',mention:{page:{id:hidden}},plain_text:'PRIVATE_TITLE'}],
+  }]], [target, []]]);
   const block = (id,type,value,has_children=false) => ({object:'block',id,type,[type]:value,has_children,created_time:'2026-10-01T00:00:00Z',last_edited_time:'2026-10-02T00:00:00Z'});
   const fetch = async (url, init={}) => {
     const u=new URL(url);assert.equal(u.hostname,'api.notion.com');
     calls.push({path:u.pathname,search:u.search,body:init.body ? JSON.parse(init.body) : undefined,init});
     if(u.pathname==='/v1/databases/'+database+'/query') return Response.json({results:pages.filter(p=>p.properties.공개?.checkbox),has_more:false});
+    if(u.pathname==='/v1/comments') return Response.json({results:comments.get(u.searchParams.get('block_id')) || [],has_more:false});
     if(u.pathname.startsWith('/v1/pages/')) {
       const p=pages.find(p=>p.id===u.pathname.split('/').pop());return p ? Response.json(p) : Response.json({code:'object_not_found'},{status:404});
     }
@@ -33,7 +39,7 @@ function upstream() {
     if(u.pathname==='/v1/blocks/'+target+'/children') return Response.json({results:[],has_more:false});
     throw new Error('Unexpected or unauthorized read: '+u.pathname);
   };
-  return {pages,calls,fetch};
+  return {pages,calls,fetch,comments};
 }
 
 module.exports = { database, ids, upstream };

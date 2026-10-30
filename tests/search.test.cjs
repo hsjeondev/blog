@@ -7,11 +7,13 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
 }).outputText, filename);
 const { normalizeFolderPath, folderPathFromProperty, folderAncestors, buildFolderTree } = require('../utils/search/folders.ts');
-const { normalizePage, searchContent, inScope } = require('../utils/search/search-service.ts');
+const { normalizePage, searchContent, inScope, searchableBody } = require('../utils/search/search-service.ts');
 const { clientAddress, reserveUsage, agentConfigured, answerCacheKey, agentModel, missingAgentSettings, getAnswerCache, setAnswerCache } = require('../utils/agent/usage.ts');
 const { createAgentTools } = require('../utils/agent/tools.ts');
 const pageReader = require('../utils/get-notion-page.ts');
 const publication = require('../utils/published-notion.ts');
+const recordReader = require('../utils/official-record-map.ts');
+const { bodyTextCache } = require('../utils/search/body-cache.ts');
 process.env.NOTION_MYBOOKLIST_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 process.env.NOTION_TOKEN = 'test-only';
 const { runSearchAgent } = require('../utils/agent/search-agent.ts');
@@ -54,19 +56,121 @@ test('normalized results retain page routes and metadata', () => {
 });
 
 test('body search reads only the published catalog and retains title results on body failure', async () => {
-  const original = global.fetch, reader = pageReader.getNotionPage;
+  const original = global.fetch, reader = recordReader.officialRecordMap, gate = publication.getPublishedPage;
   try {
+    bodyTextCache.clear();
     global.fetch = async () => Response.json({ results: [page(doc, '문서')] });
-    pageReader.getNotionPage = async () => ({ block: { text: {value:{type:'text',properties:{title:[['본문 내용']]}}} } });
-    const result = await searchContent('본문', 'document', '개발');
+    publication.getPublishedPage = async () => page(doc, '문서');
+    recordReader.officialRecordMap = async () => ({ block: { [doc.id]:{value:{type:'page',content:['text']}},text: {value:{type:'text',properties:{title:[['본문 내용']]}}} } });
+    const result = await searchContent('본문', 'document', '개발', 30, {mode:'body'});
     assert.equal(result.partial, false);
     assert.equal(result.results.length, 1);
     assert.equal(result.results[0].href, doc.href);
     assert.match(result.results[0].excerpt, /본문/);
-    pageReader.getNotionPage = async () => { throw new Error('unavailable'); };
+    bodyTextCache.clear();
+    recordReader.officialRecordMap = async () => { throw new Error('unavailable'); };
     assert.deepEqual((await searchContent('KMP', 'document')).results.map(item => item.id), [doc.id]);
-    assert.equal((await searchContent('missing')).partial, true);
-  } finally { global.fetch = original; pageReader.getNotionPage = reader; }
+    assert.equal((await searchContent('missing','all','',30,{mode:'body'})).partial, true);
+  } finally { global.fetch = original; recordReader.officialRecordMap = reader; publication.getPublishedPage = gate; bodyTextCache.clear(); }
+});
+
+test('book metadata search needs one query and no bodies, including author and category', async()=>{
+  const original=global.fetch,reader=recordReader.officialRecordMap;
+  try {
+    const book=page({...doc,title:'픽사 스토리텔링'},'포스트');
+    book.properties.저자={rich_text:[{plain_text:'매튜 룬'}]};
+    book.properties.분류={select:{name:'기획'}};
+    let calls=0;
+    global.fetch=async()=>{calls++;return Response.json({results:[book]});};
+    recordReader.officialRecordMap=async()=>assert.fail('metadata searches must not read bodies');
+    for(const query of ['픽사','매튜','기획']) {
+      const before=calls,result=await searchContent(query);
+      assert.equal(calls-before,1);
+      assert.deepEqual(result.results.map(r=>r.title),['픽사 스토리텔링']);
+    }
+  } finally {global.fetch=original;recordReader.officialRecordMap=reader;}
+});
+
+test('body search covers more than twenty books in bounded batches and reuses revision-keyed text',async()=>{
+  const original=global.fetch,reader=recordReader.officialRecordMap,gate=publication.getPublishedPage;
+  try {
+    bodyTextCache.clear();
+    const books=Array.from({length:23},(_,i)=>page({...doc,id:(i+1).toString(16).padStart(8,'0')+'-1111-4111-8111-111111111111',title:'책 '+i},'포스트'));
+    global.fetch=async()=>Response.json({results:books});
+    publication.getPublishedPage=async id=>books.find(b=>b.id===id);
+    let reads=0;
+    recordReader.officialRecordMap=async p=>{reads++;return {block:{[p.id]:{value:{type:'page',content:['text']}},text:{value:{type:'text',properties:{title:[[p.id===books[22].id?'마지막 본문의 검색어':'다른 문장']]}}}}};};
+    let cursor='',found=[],steps=0;
+    do {
+      const before=reads,result=await searchContent('검색어','all','',50,{mode:'body',cursor});
+      assert.ok(reads-before<=2);found.push(...result.results);cursor=result.nextCursor||'';steps++;
+    } while(cursor);
+    assert.equal(steps,12);assert.equal(reads,23);assert.deepEqual(found.map(r=>r.id),[books[22].id]);
+    await searchContent('문장','all','',50,{mode:'body'});assert.equal(reads,23);
+    books[0].last_edited_time='2026-10-30T10:00:00Z';
+    await searchContent('문장','all','',50,{mode:'body'});assert.equal(reads,24);
+    books[0].properties.공개.checkbox=false;
+    const hidden=await searchContent('문장','all','',50,{mode:'body'});
+    assert.ok(!hidden.results.some(r=>r.id===books[0].id));assert.ok(!(books[0].id in hidden.live));
+  } finally {global.fetch=original;recordReader.officialRecordMap=reader;publication.getPublishedPage=gate;bodyTextCache.clear();}
+});
+
+test('body search does not return excerpts when publication revalidation fails',async()=>{
+  const original=global.fetch,reader=recordReader.officialRecordMap,gate=publication.getPublishedPage;
+  try {
+    bodyTextCache.clear();let calls=0;
+    global.fetch=async()=>{if(++calls===2)throw new Error('Notion unavailable');return Response.json({results:[page(doc,'문서')]});};
+    publication.getPublishedPage=async()=>page(doc,'문서');
+    recordReader.officialRecordMap=async()=>({block:{[doc.id]:{value:{type:'page',content:['text']}},text:{value:{type:'text',properties:{title:[['검색어']]}}}}});
+    await assert.rejects(searchContent('검색어','all','',30,{mode:'body'}),/Notion unavailable/);
+  } finally {global.fetch=original;recordReader.officialRecordMap=reader;publication.getPublishedPage=gate;bodyTextCache.clear();}
+});
+
+test('unpublishing during a body read prevents both the result and a reusable cache entry',async()=>{
+  const original=global.fetch,reader=recordReader.officialRecordMap,gate=publication.getPublishedPage;
+  try {
+    bodyTextCache.clear();const book=page(doc,'문서');let reads=0;
+    global.fetch=async()=>Response.json({results:[book]});
+    publication.getPublishedPage=async()=>book;
+    recordReader.officialRecordMap=async()=>{
+      reads++;if(reads===1)book.properties.공개.checkbox=false;
+      return {block:{[doc.id]:{value:{type:'page',content:['text']}},text:{value:{type:'text',properties:{title:[['검색어가 있는 본문']]}}}}};
+    };
+    const revoked=await searchContent('검색어','all','',30,{mode:'body'});
+    assert.deepEqual(revoked.results,[]);assert.deepEqual(revoked.live,{});
+    book.properties.공개.checkbox=true;
+    const visible=await searchContent('검색어','all','',30,{mode:'body'});
+    assert.equal(visible.results.length,1);assert.equal(reads,2);
+  } finally {global.fetch=original;recordReader.officialRecordMap=reader;publication.getPublishedPage=gate;bodyTextCache.clear();}
+});
+
+test('search cache text excludes referenced page titles and unrelated map entries',()=>{
+  const map={block:{
+    root:{value:{type:'page',content:['body','referenced']}},
+    body:{value:{type:'text',properties:{title:[['내 독서 기록'],['다른 책 제목',[['p','referenced']]],['내부 링크',[['a','/11111111-1111-4111-8111-111111111111']]]]},content:['cell']}},
+    cell:{value:{type:'table_row',properties:{column_0:[['표에 있는 내용']]}}},
+    referenced:{value:{type:'page',properties:{title:[['다른 책 제목']]}}},
+    orphan:{value:{type:'text',properties:{title:[['관련 없는 내용']]}}},
+  }};
+  const text=searchableBody(map,'root');
+  assert.match(text,/내 독서 기록/);assert.match(text,/표에 있는 내용/);
+  for(const hidden of ['다른 책 제목','내부 링크','관련 없는 내용']) assert.ok(!text.includes(hidden));
+});
+
+test('disconnecting search cancels the upstream request and removes listeners',async()=>{
+  const original=global.fetch;
+  try {
+    const req=new EventEmitter();Object.assign(req,{method:'GET',query:{q:'책'}});
+    const res=response();let upstreamSignal;
+    global.fetch=async(_url,init)=>{
+      upstreamSignal=init.signal;
+      return new Promise((_resolve,reject)=>init.signal.addEventListener('abort',()=>reject(init.signal.reason),{once:true}));
+    };
+    const pending=searchHandler(req,res);
+    req.emit('aborted');await pending;
+    assert.equal(upstreamSignal.aborted,true);assert.equal(res.body,undefined);
+    assert.equal(req.listenerCount('aborted'),0);assert.equal(res.listenerCount('close'),0);
+  } finally {global.fetch=original;}
 });
 
 test('agent tools enforce scope, public text traversal, source membership and five-read budget', async () => {

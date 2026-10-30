@@ -26,6 +26,7 @@ const SearchResultItem = React.forwardRef<HTMLAnchorElement, {
       initial={{ opacity: reducedMotion ? 1 : .45 }} animate={{ opacity: 1 }} transition={{ duration: reducedMotion ? 0 : .18 }}>
       <strong>{result.title}</strong>
       <small>{scopeLabels[result.type]}{result.folderPath && ` · ${result.folderPath.replaceAll("/", " / ")}`}</small>
+      {(result.author || result.category) && <small>{[result.author, result.category].filter(Boolean).join(' · ')}</small>}
       {result.excerpt && <p>{result.excerpt}</p>}
     </motion.div>
   </MotionLink>;
@@ -35,9 +36,9 @@ export function Search({ onClose, initialOptions = {} }: { onClose: () => void; 
   const router = useRouter();
   const aiGradientId = useId();
   const [query, setQuery] = useState("");
-  const [scope, setScope] = useState<SearchScope>("all");
+  const [scope, setScope] = useState<SearchScope>(initialOptions.scope || "all");
   const [folder, setFolder] = useState(initialOptions.folder || "");
-  const { results, loading, error, partial } = useSearchResults(query, scope, folder);
+  const { results, loading, error, partial, body, searchBody, stopBody } = useSearchResults(query, scope, folder);
   const reducedMotion = useReducedMotion();
   const isPresent = useIsPresent();
   const [selected, setSelected] = useState(0);
@@ -165,7 +166,7 @@ export function Search({ onClose, initialOptions = {} }: { onClose: () => void; 
         }
       }}>
       <div className="global-search-input">
-        <input ref={inputRef} value={query} maxLength={300} aria-label="블로그 검색어" placeholder="검색하거나 질문하세요"
+        <input ref={inputRef} value={query} maxLength={300} aria-label="블로그 검색어" placeholder="책 제목·저자·분류로 검색"
           onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => {
             if (event.nativeEvent.isComposing) return;
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void askAgent(); }
@@ -200,10 +201,15 @@ export function Search({ onClose, initialOptions = {} }: { onClose: () => void; 
       <motion.div className="global-search-body" layoutScroll>
         {!answerMode && <>
         <div role="status" className="global-search-status">
-          {!query.trim() ? "제목과 본문을 검색합니다. 질문을 입력하고 AI 탭을 선택하면 답변을 생성합니다." : error ? `${results.length ? `검색 결과 ${results.length}개 · ` : ""}${error}` : loading ? results.length ? `검색 결과 ${results.length}개 · 갱신 중…` : "검색 중입니다…" : `검색 결과 ${results.length}개`}
-          {partial && <p>본문 검색에 연결하지 못해 제목 검색 결과만 표시합니다.</p>}
+          {!query.trim() ? "책 제목·저자·분류를 먼저 검색합니다. 본문은 ‘본문에서도 검색’으로 확인할 수 있습니다." : error ? error : loading ? "책 정보를 검색하고 있습니다…" : body.loading ? `검색 결과 ${results.length}개 · 본문 확인 중 ${body.scanned}/${body.total}` : `검색 결과 ${results.length}개`}
+          {partial && <p>일부 본문은 확인하지 못했습니다.</p>}
+          {body.error && <p role="alert">{body.error}</p>}
+          {body.stopped && <p>본문 검색을 중지했습니다.</p>}
         </div>
-        {query.trim() && !loading && !error && !results.length && <p className="global-search-status">일치하는 글이 없습니다. 검색어 또는 범위를 바꿔 보세요.</p>}
+        {query.trim() && !loading && !error && <button type="button" className="global-search-folder" onClick={body.loading ? stopBody : () => void searchBody()}>
+          {body.loading ? '본문 검색 중지' : '본문에서도 검색'}
+        </button>}
+        {query.trim() && !loading && !body.loading && !error && !results.length && <p className="global-search-status">일치하는 글이 없습니다. 본문에서도 검색하거나 검색어를 바꿔 보세요.</p>}
         <motion.div className="global-search-results" aria-label="검색 결과" aria-busy={loading}>
           <AnimatePresence initial={false} mode="popLayout">
           {results.map((result, index) => <SearchResultItem key={resultKey(query, result.id)} result={result}

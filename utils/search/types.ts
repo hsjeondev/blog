@@ -3,6 +3,8 @@ export type SearchScope = typeof SEARCH_SCOPES[number];
 export type SearchResult = {
   id: string;
   title: string;
+  author?: string;
+  category?: string;
   type: Exclude<SearchScope, "all">;
   folderPath: string;
   href: string;

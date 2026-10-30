@@ -67,3 +67,14 @@ test('database 429 respects Retry-After, bounds retries, and never retries auth 
     }
   } finally { global.fetch=original; }
 });
+
+test('cancelled requests stop during a Notion cooldown without issuing another fetch',async()=>{
+  const original=global.fetch;
+  try {
+    const controller=new AbortController();let calls=0;
+    global.fetch=async()=>{calls++;return Response.json({}, {status:429,headers:{'retry-after':'20'}});};
+    const pending=fetchNotionJson('https://api.notion.com/test',{signal:controller.signal});
+    await new Promise(resolve=>setImmediate(resolve));controller.abort();
+    await assert.rejects(pending,error=>error.name==='AbortError');assert.equal(calls,1);
+  } finally {global.fetch=original;}
+});

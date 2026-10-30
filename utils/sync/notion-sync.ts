@@ -25,7 +25,7 @@ function storedBook(page: any, map: any, links: string[]): SyncBook {
   };
 }
 
-async function collectPage(id: string, catalog: ReturnType<typeof bookMetadata>[], signal?: AbortSignal) {
+export async function collectPage(id: string, catalog: ReturnType<typeof bookMetadata>[], signal?: AbortSignal) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const page = await getPublishedPage(id, signal);
     const map = await officialRecordMap(page, catalog, signal);

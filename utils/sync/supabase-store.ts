@@ -1,7 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import type { SyncStore } from './notion-sync';
 
-const functions = new Set(['blog_sync_started_at', 'blog_commit_notion_snapshot', 'blog_soft_delete_notion_post', 'blog_note_sync_failure']);
+const functions = new Set(['blog_sync_started_at', 'blog_commit_notion_snapshot', 'blog_soft_delete_notion_post', 'blog_note_sync_failure',
+  'blog_store_webhook_verification', 'blog_enqueue_notion_event', 'blog_claim_notion_event', 'blog_finish_notion_event',
+  'blog_release_notion_worker', 'blog_commit_notion_page', 'blog_commit_notion_graph', 'blog_retry_failed_notion_events']);
 
 // Administrative CLI transport only. Application workers must use a server
 // secret/service-role key and the ordinary RPC transport below, never the PAT.
@@ -18,10 +20,11 @@ export function createSyncStore(management = false): SyncStore {
       const json = JSON.stringify(args);
       let marker: string;
       do { marker = '$blog_' + randomBytes(8).toString('hex') + '$'; } while (json.includes(marker));
-      const cast: Record<string, string> = { p_database: 'uuid', p_page: 'uuid', p_started_at: 'timestamptz', p_error: 'text', p_books: 'jsonb' };
+      const cast: Record<string, string> = { p_database: 'uuid', p_page: 'uuid', p_started_at: 'timestamptz', p_error: 'text', p_books: 'jsonb',
+        p_worker: 'uuid', p_event: 'text', p_type: 'text', p_time: 'timestamptz', p_token: 'text', p_success: 'boolean', p_book: 'jsonb', p_public_ids: 'jsonb', p_links: 'jsonb' };
       const expressions = Object.keys(args).map(key => {
         if (!Object.hasOwn(cast, key)) throw new Error('Invalid sync parameter');
-        return `${key} => (payload${key === 'p_books' ? '->' : '->>'}'${key}')::${cast[key]}`;
+        return `${key} => (payload${cast[key] === 'jsonb' ? '->' : '->>'}'${key}')::${cast[key]}`;
       });
       const query = `SELECT public.${name}(${expressions.join(', ')}) AS result FROM (SELECT ${marker}${json}${marker}::jsonb AS payload) input`;
       target = `https://api.supabase.com/v1/projects/${url.hostname.split('.')[0]}/database/query`;

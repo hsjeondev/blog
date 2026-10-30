@@ -1,6 +1,6 @@
 import * as React from "react";
 import Link from "next/link";
-import IonIcon from "@reacticons/ionicons";
+import IonIcon from "./Icon";
 import { KnowledgeGraph, type GraphData } from "./Graph/KnowledgeGraph";
 import { compactNotionId, resolveBacklinkSources } from "../utils/backlink-graph";
 import { motion } from "framer-motion";

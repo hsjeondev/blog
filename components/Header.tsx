@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useSearch } from "./Search/SearchProvider";
-import IonIcon from '@reacticons/ionicons';
+import IonIcon from "./Icon";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTheme } from "../hooks/useDarkMode";
 

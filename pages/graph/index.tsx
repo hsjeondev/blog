@@ -1,5 +1,5 @@
 import * as React from "react";
-import IonIcon from "@reacticons/ionicons";
+import IonIcon from "../../components/Icon";
 import { useRouter } from "next/router";
 import { PageHead } from "../../components/PageHead";
 import { KnowledgeGraph, type GraphData } from "../../components/Graph/KnowledgeGraph";

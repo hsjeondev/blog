@@ -1,4 +1,4 @@
-import IonIcon from "@reacticons/ionicons";
+import IonIcon from "../Icon";
 import { AnimatePresence, motion } from "framer-motion";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";

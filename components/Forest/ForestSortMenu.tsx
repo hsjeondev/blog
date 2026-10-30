@@ -1,4 +1,4 @@
-import IonIcon from "@reacticons/ionicons";
+import IonIcon from "../Icon";
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ForestSort } from "../../utils/forest-navigation";

@@ -35,7 +35,7 @@ Notion 페이지를 웹에 게시할 필요는 없습니다. 웹훅 작업자가
 
 ## 공개 범위와 갱신
 
-- 목록·상세·임베드·검색·사이트맵·그래프·OG·음성 API가 같은 공개 조건과 DB 소속을 검사합니다.
+- 목록·상세·임베드·검색·사이트맵·그래프·OG API가 같은 공개 조건과 DB 소속을 검사합니다.
 - 비공개 글의 ID로 직접 요청해도 404이며, 그 글의 본문은 조회하지 않습니다.
 - 비공개 페이지 멘션/링크와 하위 DB·페이지, 외부 원본의 동기화 블록을 따라가서 수집하지 않습니다.
 - 원본의 ISR·공개 CDN 캐시·그래프 Blob 스냅샷 대신 요청마다 공개 여부를 검사하고 `no-store`를 사용합니다.
@@ -87,7 +87,7 @@ npm start
 아래 내용은 fork 원본의 구조·운영 설명입니다. 현재 책 DB 연결과 달라지는 설정은 위 안내를 우선하세요.
 원저작자: https://github.com/IceCream0910/blog
 
-Notion을 CMS로 사용하는 개인 블로그입니다. Next.js Pages Router와 ISR로 게시물·문서·월말결산을 제공하고, NotionX 렌더러로 본문을 표시합니다. 별도의 VPS 음성 서버는 Notion webhook을 받아 Fish Audio 기반 TTS를 생성하며, 백링크 데이터는 D3 그래프로 시각화합니다.
+Notion을 CMS로 사용하는 개인 블로그입니다. Next.js Pages Router와 ISR로 게시물·문서·월말결산을 제공하고, NotionX 렌더러로 본문을 표시합니다. 백링크 데이터는 D3 그래프로 시각화합니다.
 
 ## 주요 기능
 
@@ -97,8 +97,6 @@ Notion을 CMS로 사용하는 개인 블로그입니다. Next.js Pages Router와
 - 포스팅·문서·프로젝트·월말결산을 연결하는 Obsidian 스타일 백링크 그래프
 - 문서 탐색에 최적화된 `/forest` 2패널 리더와 모바일 전환 UI
 - 월말결산 전용 `/recap` 뷰어
-- Notion webhook과 VPS worker를 이용한 비동기 TTS 생성
-- 문장 타임스탬프 기반 재생, 강조, 이전/다음 문장 이동
 - 본문 해시 기반 AI 요약 생성 및 Notion 속성 캐시
 - Notion Comments API 기반 댓글
 - Vercel OG 기반 소셜 공유 이미지
@@ -109,45 +107,13 @@ Notion을 CMS로 사용하는 개인 블로그입니다. Next.js Pages Router와
 ```mermaid
 flowchart LR
     Author["작성자"] --> Notion["Notion CMS"]
-
-    subgraph Vercel["Vercel · Next.js"]
-        ISR["Pages Router · ISR"]
-        Renderer["로컬 NotionX Renderer"]
-        WebAPI["Next.js API Routes"]
-        GraphAPI["Graph API"]
-        Blob["Private Vercel Blob"]
-        Browser["브라우저 UI"]
-    end
-
-    subgraph VPS["VPS · blog-audio-server"]
-        AudioAPI["FastAPI · Webhook/Manifest"]
-        Queue["SQLite Job Queue"]
-        Worker["TTS Worker"]
-        Manifest["SQLite Manifest"]
-        Audio["Content-addressed Opus"]
-    end
-
-    Notion -->|"DB query · recordMap"| ISR
-    ISR --> Renderer --> Browser
-    Browser --> WebAPI
-    WebAPI --> Notion
-
-    Notion -->|"page.created · page updated"| AudioAPI
-    AudioAPI --> Queue --> Worker
-    Worker -->|"최신 block 조회"| Notion
-    Worker --> Fish["Fish Audio Timestamp SSE"]
-    Fish --> Worker
-    Worker --> Manifest
-    Worker --> Audio
-    Browser -->|"manifest 요청"| WebAPI
-    WebAPI --> AudioAPI
-    AudioAPI --> Manifest
-    Browser -->|"segment별 재생"| Audio
-
-    Cron["Vercel Cron"] --> GraphAPI
-    GraphAPI -->|"DB · backlink 수집"| Notion
-    GraphAPI --> Blob
-    Blob --> GraphAPI --> Browser
+    Notion -->|"웹훅"| Sync["공개 글 동기화"]
+    Sync -->|"공식 API로 최신 글 수집"| Notion
+    Sync --> DB["Supabase PostgreSQL"]
+    Sync --> Storage["비공개 Supabase Storage"]
+    DB --> Web["Vercel · Next.js"]
+    Storage -->|"공개 여부를 확인하는 미디어 API"| Web
+    Web --> Browser["브라우저 · NotionX · D3"]
 ```
 
 ## 핵심 작동 방식
@@ -183,51 +149,7 @@ sequenceDiagram
 - `/forest`와 `/recap`은 `forest_분류` select 값으로 문서 종류를 분리합니다.
 - Notion 요청 실패 시 목록 페이지는 빈 데이터와 더 긴 재검증 주기로 폴백합니다.
 
-### 2. TTS 생성과 재생
-
-```mermaid
-sequenceDiagram
-    participant N as Notion
-    participant A as VPS API
-    participant Q as SQLite Queue
-    participant W as Worker
-    participant F as Fish Audio
-    participant S as Opus · Manifest Storage
-    participant B as Blog Player
-
-    N->>A: 서명된 webhook
-    A->>A: HMAC 서명 · event type 검증
-    A->>Q: pageId pending 등록
-    A-->>N: received
-    W->>Q: 가장 오래된 pending job claim
-    W->>N: 최신 page · 하위 block 재조회
-    W->>W: 읽을 수 있는 block 추출 · content hash 계산
-    alt 동일 hash의 음성이 있음
-        W->>S: 기존 Opus와 timestamp 재사용
-    else 새로운 문장 또는 설정
-        W->>F: timestamp SSE TTS 요청
-        F-->>W: audio chunk · alignment
-        W->>W: chunk offset을 전역 timeline으로 변환
-        W->>S: SHA-256 이름의 Opus 저장
-    end
-    W->>S: page manifest 원자적 교체
-    B->>A: page manifest 조회
-    A-->>B: block별 audioUrl · segments
-    B->>S: 필요한 Opus 로딩
-    B->>B: currentTime에 맞춰 문장 강조 및 이동
-```
-
-TTS 서버는 API와 worker가 같은 Docker image와 `/data` 볼륨을 공유합니다.
-
-- webhook은 `page.created`, `page.content_updated`, `page.properties_updated`만 큐에 넣습니다.
-- webhook payload의 본문을 그대로 음성화하지 않고 worker가 항상 최신 Notion block을 다시 조회합니다.
-- `POST /v1/pages/:pageId/sync`의 `202 Accepted`는 큐 등록 성공을 뜻하며 생성 완료를 뜻하지 않습니다.
-- 정규화된 텍스트, 음성 reference, 모델, 속도, narrator version으로 content hash를 만듭니다.
-- 같은 hash는 문서나 block이 달라도 하나의 Opus asset을 공유합니다.
-- 문서 전체 처리가 성공한 경우에만 manifest를 교체하며, 실패하면 이전 manifest를 유지합니다.
-- 더 이상 참조되지 않는 Opus asset은 정리합니다.
-
-### 3. 백링크 그래프와 캐시
+### 2. 백링크 그래프와 캐시
 
 ```mermaid
 flowchart TD
@@ -256,7 +178,7 @@ flowchart TD
 - 같은 런타임에서 동시에 발생한 cache miss는 하나의 graph build Promise를 공유합니다.
 - Blob이 없어도 동작하지만 cold start 뒤에는 전체 그래프를 다시 생성하므로 응답이 느릴 수 있습니다.
 
-### 4. AI 요약과 댓글
+### 3. AI 요약과 댓글
 
 - 게시물 본문 텍스트의 MD5와 Notion의 `ai_summary` rich text 속성에 저장된 hash를 비교합니다.
 - hash가 바뀐 경우에만 OpenAI로 한국어 요약을 생성하고 `[hash] summary` 형식으로 Notion에 저장합니다.
@@ -272,8 +194,7 @@ flowchart TD
 | CMS/API | Notion REST API, Notion page recordMap API |
 | UI | Tailwind CSS, CSS, Framer Motion, Ionicons |
 | 그래프 | D3 force simulation, Vercel Blob, Vercel Cron |
-| 음성 | FastAPI, SQLite, Fish Audio timestamp SSE, Opus |
-| 배포 | Vercel, Docker Compose 기반 VPS |
+| 배포 | Vercel |
 | 부가 기능 | OpenAI 요약, Vercel OG, KaTeX, PrismJS |
 
 ## 페이지와 API
@@ -295,8 +216,7 @@ flowchart TD
 | 경로 | 메서드 | 역할 |
 | --- | --- | --- |
 | `/api/forest/[pageId]` | GET | forest 문서 recordMap 조회 |
-| `/api/recap/[pageId]` | GET | 월말결산 recordMap과 narration manifest 결합 |
-| `/api/narration/[pageId]` | GET | VPS narration manifest 프록시 |
+| `/api/recap/[pageId]` | GET | 월말결산 recordMap과 섹션 조회 |
 | `/api/backlink` | POST | 특정 pageId의 백링크 조회 |
 | `/api/graph` | GET | 캐시된 전체 그래프 반환 |
 | `/api/graph/refresh` | GET | 인증된 그래프 snapshot 재생성 |
@@ -304,25 +224,15 @@ flowchart TD
 | `/api/search-notion` | POST | Notion 검색 |
 | `/api/social-image` | GET | 1200×630 OG 이미지 생성 |
 
-### VPS TTS API
-
-| 경로 | 메서드 | 역할 |
-| --- | --- | --- |
-| `/health` | GET | 상태 확인 |
-| `/webhooks/notion` | POST | Notion webhook 수신과 서명 검증 |
-| `/v1/pages/[pageId]/sync` | POST | 관리자 토큰으로 수동 queue 등록 |
-| `/v1/pages/[pageId]/manifest` | GET | 문서별 음성 manifest 조회 |
-| `/audio/[sha256].opus` | GET | immutable Opus asset 제공 |
-
 ## 프로젝트 구조
 
 ```text
 notion-blog/
-├─ components/                 # 공통 UI, Forest, Recap, Graph, TTS player
+├─ components/                 # 공통 UI, Forest, Recap, Graph
 ├─ hooks/                      # 테마, 게시물 metadata, 읽기 시간
 ├─ packages/notionx/           # 프로젝트에 맞게 포함한 Notion 본문 renderer
 ├─ pages/
-│  ├─ api/                     # Notion, narration, graph, comment API routes
+│  ├─ api/                     # Notion sync, graph, search API routes
 │  ├─ forest/                  # 문서 탐색 화면
 │  ├─ graph/                   # 전체 백링크 그래프
 │  ├─ recap/                   # 월말결산 화면
@@ -331,11 +241,6 @@ notion-blog/
 ├─ styles/                     # 전역, Notion, Forest, Recap, Graph 스타일
 ├─ utils/                      # Notion query, graph build/cache, AI summary
 ├─ public/                     # 폰트와 정적 asset
-├─ blog-audio-server/
-│  ├─ app/                     # FastAPI, queue, worker, TTS, alignment
-│  ├─ tests/                   # 음성 서버 테스트
-│  ├─ docker-compose.yml       # API/worker와 공유 volume
-│  └─ sync_all_pages.py        # 기존 모든 문서 수동 queue 등록
 └─ vercel.json                 # graph refresh cron
 ```
 
@@ -346,7 +251,6 @@ notion-blog/
 - Next.js 16을 실행할 수 있는 Node.js
 - Yarn 1.x
 - Notion integration과 대상 데이터베이스 접근 권한
-- TTS 서버까지 실행하려면 Docker 및 Docker Compose
 
 ### 웹 애플리케이션
 
@@ -364,22 +268,6 @@ yarn dev
 ```bash
 yarn build
 yarn start
-```
-
-### 음성 서버
-
-```bash
-cd blog-audio-server
-cp .env.example .env
-docker compose pull
-docker compose up -d
-curl http://127.0.0.1:8787/health
-```
-
-Windows PowerShell에서는 `cp` 대신 다음 명령을 사용할 수 있습니다.
-
-```powershell
-Copy-Item .env.example .env
 ```
 
 ## 환경변수
@@ -401,9 +289,6 @@ OPENAI_API_KEY=
 # 배포 origin. OG font와 image URL 생성에 사용
 NEXT_PUBLIC_URL=http://localhost:3000
 
-# VPS narration API origin
-AUDIO_SERVER_URL=https://audio.example.com
-
 # Private Vercel Blob
 BLOB_READ_WRITE_TOKEN=
 BLOB_STORE_ID=
@@ -418,29 +303,9 @@ CRON_SECRET=
 | `NOTION_TOKEN` | 백링크/그래프 | 서버 전용 Notion `token_v2`; 외부 노출 금지 |
 | `OPENAI_API_KEY` | AI 요약 | 요약 생성 미사용 시 생략 가능 |
 | `NEXT_PUBLIC_URL` | 배포 권장 | OG 이미지와 font의 절대 URL 기준 |
-| `AUDIO_SERVER_URL` | TTS | VPS API origin; 미설정 시 narration API는 503 |
 | `BLOB_READ_WRITE_TOKEN` | 그래프 캐시 | private graph snapshot 읽기/쓰기 |
 | `BLOB_STORE_ID` | Vercel Blob | 연결된 Blob store 식별 정보 |
 | `CRON_SECRET` | 그래프 갱신 | refresh API의 Bearer 인증 값 |
-
-### VPS 음성 서버
-
-`blog-audio-server/.env.example`을 복사해 사용합니다.
-
-| 변수 | 설명 |
-| --- | --- |
-| `FISH_API_KEY` | Fish Audio API 인증 |
-| `FISH_REFERENCE_ID` | 사용할 voice reference |
-| `FISH_MODEL` | TTS 모델 |
-| `NOTION_API_KEY` | page와 block 재조회 |
-| `NOTION_WEBHOOK_TOKEN` | Notion webhook HMAC 검증 |
-| `NOTION_DATABASE_IDS` | 허용할 DB ID 목록, 쉼표 구분 |
-| `PUBLIC_BASE_URL` | manifest의 `audioUrl`에 사용할 외부 HTTPS origin |
-| `ADMIN_TOKEN` | 수동 sync API Bearer token |
-| `DATA_DIR` | SQLite와 Opus 저장 경로, 기본 `/data` |
-| `NARRATOR_VERSION` | 음성 cache key를 수동 무효화하는 version |
-| `TTS_SPEED` | 합성 속도 |
-| `CORS_ORIGINS` | Opus 접근을 허용할 blog origin 목록 |
 
 ## Notion 구성
 
@@ -469,65 +334,6 @@ Forest DB에서 코드가 직접 참조하는 주요 속성:
 - 두 데이터베이스와 하위 페이지를 integration에 공유합니다.
 - 댓글 작성을 사용하려면 comment 생성 권한이 필요합니다.
 - AI 요약을 Notion에 캐시하려면 page property 갱신 권한이 필요합니다.
-- VPS integration에도 `NOTION_DATABASE_IDS`에 지정한 모든 데이터베이스 접근 권한을 부여합니다.
-
-## TTS 서버 운영
-
-### Webhook 연결
-
-1. VPS의 `https://audio.example.com`을 `127.0.0.1:8787`로 reverse proxy합니다.
-2. `PUBLIC_BASE_URL`을 같은 HTTPS origin으로 설정합니다.
-3. Notion webhook endpoint를 `https://audio.example.com/webhooks/notion`으로 지정합니다.
-4. 최초 verification payload의 token을 `NOTION_WEBHOOK_TOKEN`에 저장하고 subscription을 확인합니다.
-5. `page.created`, `page.content_updated`, `page.properties_updated` 이벤트를 구독합니다.
-
-### 수동 동기화
-
-한 문서:
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  https://audio.example.com/v1/pages/PAGE_ID/sync
-```
-
-전체 문서:
-
-```bash
-cd blog-audio-server
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python sync_all_pages.py
-```
-
-Windows PowerShell에서는 virtual environment를 다음과 같이 활성화합니다.
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python sync_all_pages.py
-```
-
-전체 동기화 스크립트는 두 데이터베이스를 페이지네이션하고 pageId를 중복 제거한 뒤 sync API에 등록합니다. 반환된 `202` 개수와 실제 생성 완료 개수는 다를 수 있으므로 worker와 manifest를 추가로 확인합니다.
-
-### 상태 확인
-
-```bash
-docker compose ps
-docker compose logs -f api
-docker compose logs -f worker
-curl https://audio.example.com/health
-curl https://audio.example.com/v1/pages/PAGE_ID/manifest
-```
-
-테스트용 Docker image:
-
-```bash
-cd blog-audio-server
-docker build --target test -t blog-audio-server:test .
-```
 
 ## 그래프 캐시 운영
 
@@ -589,11 +395,3 @@ salt는 `openssl rand -hex 32`로 생성한 값을 `SEARCH_AGENT_IP_SALT`에 등
 3. private Blob store와 Cron 설정을 확인합니다.
 4. `yarn build`가 성공하는지 확인하고 배포합니다.
 5. `/`, `/forest`, `/recap`, `/graph`, 임의의 `/[pageId]`를 확인합니다.
-
-### VPS
-
-1. Docker와 reverse proxy를 준비합니다.
-2. `blog-audio-server/.env`를 서버에서만 관리합니다.
-3. API와 worker가 같은 Docker volume을 사용하도록 실행합니다.
-4. `/health`, worker log, manifest, Opus Range 요청을 확인합니다.
-5. 이미지나 환경변수를 변경했다면 API와 worker를 모두 재생성합니다.

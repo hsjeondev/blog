@@ -416,7 +416,7 @@ header.header-menu-open {
   margin-inline: auto;
 }
 
-.post-reading-layout .post-narration-content .notion .custom-content {
+.post-reading-layout .post-content .notion .custom-content {
   max-width: 760px;
 }
 
@@ -425,7 +425,7 @@ header.header-menu-open {
   min-width: 0;
 }
 
-.post-reading-layout .post-narration-content .notion-asset-wrapper {
+.post-reading-layout .post-content .notion-asset-wrapper {
   min-width: 0;
   max-width: 100%;
 }

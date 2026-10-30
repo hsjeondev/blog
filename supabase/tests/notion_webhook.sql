@@ -86,6 +86,12 @@ BEGIN
   PERFORM public.blog_release_notion_worker(src, wb);
   PERFORM public.blog_enqueue_notion_event(src, 'comment:' || ea, 'comment.updated', a, now());
   job := public.blog_claim_notion_event(src, wa);
+  BEGIN
+    PERFORM public.blog_commit_notion_page(src, wa, job->>'id', a, public.blog_sync_started_at(),
+      jsonb_build_object('links_only',true,'post',jsonb_set(book->'post','{notion_edited_at}',to_jsonb(now() - interval '1 day')),'links','[]'::jsonb), jsonb_build_array(a));
+    RAISE EXCEPTION 'old comment revision modified current post';
+  EXCEPTION WHEN raise_exception THEN IF SQLERRM <> 'Foreign database or older page revision' THEN RAISE; END IF; END;
+  IF NOT EXISTS (SELECT 1 FROM public.blog_posts WHERE id = a AND sync_status = 'ready') THEN RAISE EXCEPTION 'stale comment hid current content'; END IF;
   PERFORM public.blog_commit_notion_page(src, wa, job->>'id', a, public.blog_sync_started_at(),
     jsonb_build_object('links_only',true,'post',book->'post','links','[]'::jsonb), jsonb_build_array(a));
   IF (SELECT plain_text FROM public.blog_post_contents WHERE post_id = a) <> 'Temporary fixture' THEN RAISE EXCEPTION 'comment update replaced the body'; END IF;

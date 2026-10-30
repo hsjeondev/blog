@@ -194,6 +194,10 @@ BEGIN
   SELECT EXISTS (SELECT 1 FROM public.blog_posts WHERE id = p_page AND notion_database_id = p_database AND is_published AND sync_status = 'ready' AND deleted_at IS NULL) INTO was_public;
   IF p_book IS NOT NULL AND p_book <> 'null'::jsonb THEN
     IF (p_book->'post'->>'id')::uuid IS DISTINCT FROM p_page THEN RAISE EXCEPTION 'Page mismatch'; END IF;
+    IF EXISTS (SELECT 1 FROM public.blog_posts WHERE id = p_page
+      AND (notion_database_id <> p_database OR notion_edited_at > (p_book->'post'->>'notion_edited_at')::timestamptz)) THEN
+      RAISE EXCEPTION 'Foreign database or older page revision';
+    END IF;
     IF p_book->>'links_only' = 'true' THEN
       IF NOT EXISTS (SELECT 1 FROM public.blog_posts WHERE id = p_page AND notion_database_id = p_database
         AND notion_edited_at = (p_book->'post'->>'notion_edited_at')::timestamptz AND is_published AND deleted_at IS NULL AND sync_status = 'ready') THEN

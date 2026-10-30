@@ -13,10 +13,17 @@ interface BacklinksProps {
 
 export const Backlinks: React.FC<BacklinksProps> = ({ currentId, currentTitle = "현재 문서", onNavigate }) => {
   const [sources, setSources] = React.useState<ReturnType<typeof resolveBacklinkSources>>([]);
+  const [requestedId, setRequestedId] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState(false);
+  const [attempt, setAttempt] = React.useState(0);
 
   React.useEffect(() => {
+    if (requestedId !== currentId) return;
     const controller = new AbortController();
     setSources([]);
+    setLoading(true);
+    setError(false);
     fetch("/api/backlink", {
       method: "POST",
       body: JSON.stringify({ currentId }),
@@ -28,10 +35,11 @@ export const Backlinks: React.FC<BacklinksProps> = ({ currentId, currentTitle = 
         (source) => compactNotionId(source.id) !== compactNotionId(currentId),
       )))
       .catch((error) => {
-        if (error.name !== "AbortError") setSources([]);
-      });
+        if (error.name !== "AbortError") { setSources([]); setError(true); }
+      })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [currentId]);
+  }, [currentId, requestedId, attempt]);
 
   const graph = React.useMemo<GraphData>(() => ({
     nodes: [
@@ -46,7 +54,8 @@ export const Backlinks: React.FC<BacklinksProps> = ({ currentId, currentTitle = 
       <div className="backlink-graph-heading">
         <div>
           <b id={`backlink-title-${compactNotionId(currentId)}`}>이 문서를 가리키는 연결</b>
-          <small>{sources.length ? `${sources.length}개의 문서가 연결되어 있습니다.` : "아직 연결된 문서가 없습니다."}</small>
+          <small>{requestedId !== currentId ? '필요할 때 연결된 기록을 확인할 수 있습니다.' : loading ? '연결된 기록을 확인하고 있습니다…' : error ? '연결을 불러오지 못했습니다.' : sources.length ? `${sources.length}개의 문서가 연결되어 있습니다.` : "아직 연결된 문서가 없습니다."}</small>
+          {(requestedId !== currentId || error) && <button type="button" onClick={() => { setSources([]); setError(false); setRequestedId(currentId); setAttempt(value => value + 1); }}>연결된 기록 확인</button>}
         </div>
         <Link href={`/graph?focus=${encodeURIComponent(currentId)}`} className="no-underline">
           <motion.button
@@ -62,7 +71,7 @@ export const Backlinks: React.FC<BacklinksProps> = ({ currentId, currentTitle = 
 
         </Link>
       </div>
-      {!!sources.length && <KnowledgeGraph data={graph} activeId={currentId} variant="compact" onNavigate={onNavigate} />}
+      {requestedId === currentId && !!sources.length && <KnowledgeGraph data={graph} activeId={currentId} variant="compact" onNavigate={onNavigate} />}
     </section>
   );
 };

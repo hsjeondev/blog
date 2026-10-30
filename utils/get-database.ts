@@ -1,7 +1,7 @@
 import { bookDatabaseId, isPublishedBook, notionId, notionRequest, notPublished } from './notion-server';
 
 // Every caller, including the legacy API route, must use this publication boundary.
-export async function getDatabase(databaseId = bookDatabaseId(), body: any = {}) {
+export async function getDatabase(databaseId = bookDatabaseId(), body: any = {}, signal?: AbortSignal) {
   const id = notionId(databaseId);
   if (!id || id !== bookDatabaseId()) throw notPublished();
   const publication = { property: '공개', checkbox: { equals: true } };
@@ -13,7 +13,7 @@ export async function getDatabase(databaseId = bookDatabaseId(), body: any = {})
       sorts: body.sorts || [{ timestamp: 'last_edited_time', direction: 'descending' }],
       filter: body.filter ? { and: [publication, body.filter] } : publication,
       ...(cursor ? { start_cursor: cursor } : {}),
-    });
+    }, signal);
     results.push(...(data.results || []).filter(isPublishedBook));
     cursor = data.has_more ? data.next_cursor : undefined;
     if (data.has_more && !cursor) throw new Error('Incomplete Notion pagination');

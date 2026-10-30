@@ -17,8 +17,8 @@ export function createAgentTools(catalog: SearchResult[], scope: SearchScope, fo
     signal.throwIfAborted();
     if (name === "search_content") {
       if (typeof args.query !== "string" || !args.query.trim() || args.query.length > 300) return { error: "Invalid query" };
-      const result = await searchContent(args.query, scope, folder, 8);
-      return { ...result, results: result.results.filter((item) => allowed.has(compactNotionId(item.id))) };
+      const result = await searchContent(args.query, scope, folder, 8, { mode: 'body', signal });
+      return { partial: result.partial || !!('nextCursor' in result && result.nextCursor), results: result.results.filter((item) => allowed.has(compactNotionId(item.id))) };
     }
     if (name === "list_folder") {
       if (typeof args.path !== "string" || args.path.length > 500) return { error: "Invalid path" };

@@ -63,7 +63,7 @@ export default function Page({ pageId, recordMap, summary }) {
         return <div>Invalid page data</div>;
     }
 
-    const { title, category, tags, date } = usePostMetadata(pageId, recordMap);
+    const { title, author, category, tags, date } = usePostMetadata(pageId, recordMap);
     const readTime = useReadingTime(recordMap);
     const darkMode = useDarkMode();
     useEffect(() => {
@@ -107,6 +107,7 @@ export default function Page({ pageId, recordMap, summary }) {
             <div className='page-container'>
                 <PostHeader
                     title={title}
+                    author={author}
                     category={category}
                     tags={tags}
                     date={date}

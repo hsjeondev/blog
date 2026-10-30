@@ -7,7 +7,8 @@ const itemVariants = {
     visible: { opacity: 1, y: 0 }
 };
 
-export const PostHeader = ({ title, category, tags, date, readTime, summary }) => {
+export const PostHeader = ({ title, author, category, tags, date, readTime, summary }) => {
+    const bookAuthor = author?.trim();
     return (
         <div className='pt-6 pb-0 sticky z-10'>
             <motion.div
@@ -37,19 +38,29 @@ export const PostHeader = ({ title, category, tags, date, readTime, summary }) =
                 ))}
             </motion.div>
 
-            <motion.h2
-                layoutId={`title-${title}`}
+            <motion.div
                 variants={itemVariants}
-                className="mt-2"
+                className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1"
             >
-                <BlurText
-                    text={title}
-                    delay={50}
-                    animateBy="words"
-                    direction="bottom"
-                    className="text-3xl font-black m-0"
-                />
-            </motion.h2>
+                <motion.h2 layoutId={`title-${title}`} className="m-0 min-w-0 max-w-full">
+                    <BlurText
+                        text={title}
+                        delay={50}
+                        animateBy="words"
+                        direction="bottom"
+                        className="text-3xl font-black m-0"
+                    />
+                </motion.h2>
+                {bookAuthor && (
+                    <span
+                        aria-label={`저자 ${bookAuthor}`}
+                        style={{ color: 'var(--foreground-transparent)' }}
+                        className="post-author text-sm font-normal break-words"
+                    >
+                        {bookAuthor}
+                    </span>
+                )}
+            </motion.div>
 
             <motion.span
                 variants={itemVariants}

@@ -150,11 +150,10 @@ test('unpublishing takes effect on the next detail, search and graph request',()
   const graph=await buildGraphData();assert.ok(!graph.nodes.some(n=>n.id===published));assert.equal(graph.links.filter(e=>e.source===published||e.target===published).length,0);
 }));
 
-test('detail-facing APIs reject a private ID and return no-store, including comments, narration and social images',()=>withFixture(async f=>{
+test('detail-facing APIs reject a private ID and return no-store, including comments and social images',()=>withFixture(async f=>{
   const cases=[
     ['../pages/api/forest/[pageId].js','GET',{pageId:hidden}],
     ['../pages/api/recap/[pageId].js','GET',{pageId:hidden}],
-    ['../pages/api/narration/[pageId].js','GET',{pageId:hidden}],
     ['../pages/api/comments/[id].ts','GET',{id:hidden}],
     ['../pages/api/comments/[id].ts','POST',{id:hidden}],
     ['../pages/api/backlink.ts','POST',{}],
@@ -276,3 +275,15 @@ test('an isolated book keeps its own node while unrelated books and membership l
   assert.deepEqual(adjacentGraph(graph,published),{nodes:[{...current,kind:'current'}],links:[]});
   assert.deepEqual(adjacentGraph(graph,hidden),{nodes:[],links:[]});
 });
+
+test('recap returns stored sections without contacting a retired voice server',()=>withFixture(async f=>{
+  process.env.AUDIO_SERVER_URL='https://retired-voice.example';
+  const res=response();
+  await require('../pages/api/recap/[pageId].js').default({method:'GET',query:{pageId:published}},res);
+  assert.equal(res.statusCode,200);
+  assert.ok(res.body.recordMap.block[published]);
+  assert.ok(Array.isArray(res.body.sections));
+  assert.deepEqual(Object.keys(res.body).sort(),['recordMap','sections']);
+  assert.equal(f.calls.length,0);
+  assert.equal(f.db.calls.length,1);
+}));

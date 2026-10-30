@@ -6,7 +6,6 @@ import '../styles/recap.css'
 import '../styles/forest.css'
 import '../styles/search.css'
 import '../styles/graph.css'
-import '../styles/post-narration.css'
 import { Header } from "../components/Header";
 import { useRouter } from 'next/router';
 import { Spinner } from "../components/Spinner";

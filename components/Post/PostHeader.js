@@ -1,14 +1,13 @@
 import { motion } from 'framer-motion';
 import BlurText from "../BlurText";
 import AISummary from "./AISummary";
-import { PostNarrationPlayer } from './PostNarrationPlayer'
 
 const itemVariants = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0 }
 };
 
-export const PostHeader = ({ pageId, contentRef, title, category, tags, date, readTime, summary }) => {
+export const PostHeader = ({ title, category, tags, date, readTime, summary }) => {
     return (
         <div className='pt-6 pb-0 sticky z-10'>
             <motion.div
@@ -60,11 +59,6 @@ export const PostHeader = ({ pageId, contentRef, title, category, tags, date, re
                 {date && `${date} | `}<span className='tossface'>🕒</span> 읽는 데 {readTime}분 예상
             </motion.span>
             <motion.div variants={itemVariants} className='m-8' />
-
-
-            <motion.div variants={itemVariants}>
-                <PostNarrationPlayer pageId={pageId} contentRef={contentRef} />
-            </motion.div>
 
             <AISummary summary={summary} />
         </div>

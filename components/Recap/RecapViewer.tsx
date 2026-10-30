@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import IonIcon from "../Icon";
-import { AnimatePresence, LayoutGroup, motion, useMotionValue, useTransform, type MotionValue } from "framer-motion";
+import { AnimatePresence, LayoutGroup, motion, useMotionValue, useTransform } from "framer-motion";
 import { NotionRenderer } from "../../packages/notionx";
 import { Code, Collection, Equation, Modal, mapPublishedImageUrl } from "../../utils/notion-components";
 import { useDarkMode } from "../../hooks/useDarkMode";
@@ -20,9 +20,6 @@ type MusicMetadata = {
   url?: string;
 };
 type RecapSection = { id: string; title: string; blockIds: string[] };
-type NarrationSegment = { text: string; start: number; end: number; chunkSeq?: number };
-type NarrationBlock = { hash: string; text: string; duration: number; audioUrl: string; segments: NarrationSegment[] };
-type NarrationManifest = { pageId: string; status: string; blocks: Record<string, NarrationBlock> };
 type RecapPost = {
   id: string;
   title: string;
@@ -31,7 +28,6 @@ type RecapPost = {
   properties: Record<string, RecapItem[]>;
   sections?: RecapSection[];
   recordMap?: any;
-  narration?: NarrationManifest;
 };
 type PropertySlide = { type: "property"; key: string; title: string; items: RecapItem[] };
 type CoverSlide = { type: "cover"; title: string };
@@ -361,129 +357,36 @@ function PropertyContent({ slide, activeMusicIndex, musicById, onToggleAutoplay 
   );
 }
 
-const KARAOKE_LEAD_SECONDS = 0.12;
-
-function narrationMatchKey(text: string) {
-  return markdownLinkLabels(text).normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
-}
-
-function alignNarrationSegments(sourceText: string, narration: NarrationBlock): NarrationSegment[] {
-  const segments = narration.segments.length ? narration.segments : [{ text: narration.text, start: 0, end: narration.duration }];
-  if (!sourceText) return segments;
-
-  let normalizedSource = "";
-  const sourceIndexes: number[] = [];
-  for (let index = 0; index < sourceText.length;) {
-    const codePoint = sourceText.codePointAt(index);
-    const character = codePoint === undefined ? "" : String.fromCodePoint(codePoint);
-    const normalized = narrationMatchKey(character);
-    normalizedSource += normalized;
-    for (let offset = 0; offset < normalized.length; offset += 1) sourceIndexes.push(index);
-    index += character.length || 1;
-  }
-
-  let normalizedCursor = 0;
-  const matches: number[] = [];
-  const allMatched = segments.every((segment) => {
-    const key = narrationMatchKey(segment.text);
-    const match = key ? normalizedSource.indexOf(key, normalizedCursor) : -1;
-    if (match < 0) return false;
-    matches.push(sourceIndexes[match] ?? 0);
-    normalizedCursor = match + key.length;
-    return true;
-  });
-
-  if (allMatched && matches.length === segments.length) {
-    return segments.map((segment, index) => ({
-      ...segment,
-      text: sourceText.slice(index === 0 ? 0 : matches[index], index + 1 < matches.length ? matches[index + 1] : sourceText.length),
-    }));
-  }
-
-  const weights = segments.map((segment) => Math.max(1, narrationMatchKey(segment.text).length));
-  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-  let sourceCursor = 0;
-  let elapsedWeight = 0;
-  return segments.map((segment, index) => {
-    elapsedWeight += weights[index];
-    const end = index === segments.length - 1 ? sourceText.length : Math.round(sourceText.length * elapsedWeight / totalWeight);
-    const text = sourceText.slice(sourceCursor, end);
-    sourceCursor = end;
-    return { ...segment, text };
-  });
-}
-
-function ActiveNarrationSegment({ segment, narrationTime }: { segment: NarrationSegment; narrationTime: MotionValue<number> }) {
-  const duration = Math.max(0.01, segment.end - segment.start);
-  const progress = useTransform(narrationTime, (time) => Math.max(0, Math.min(1, (time + KARAOKE_LEAD_SECONDS - segment.start) / duration)));
-  const backgroundPosition = useTransform(progress, (value) => `${100 - value * 100}% 0%`);
-  const opacity = useTransform(progress, [0, 0.08, 1], [0.32, 1, 1]);
-  return <motion.span className="is-live" style={{ backgroundPosition, opacity }}>{segment.text}</motion.span>;
-}
-
-function NarratedText({ narration, sourceText, state, narrationTime }: { narration: NarrationBlock; sourceText: string; state: "past" | "active" | "upcoming"; narrationTime: MotionValue<number> }) {
-  const segments = useMemo(() => alignNarrationSegments(sourceText, narration), [narration, sourceText]);
-  return (
-    <p className={`recap-narrated-text is-${state}`} aria-label={sourceText || narration.text}>
-      {segments.map((segment, index) => {
-        const key = `${narration.hash}-${segment.start}-${index}`;
-        if (state === "active") return <ActiveNarrationSegment key={key} segment={segment} narrationTime={narrationTime} />;
-        return <span key={key} className={state === "past" ? "is-past" : "is-upcoming"} style={{ backgroundPosition: state === "past" ? "0% 0%" : "100% 0%", opacity: state === "past" ? 1 : 0.32 }}>{segment.text}</span>;
-      })}
-    </p>
-  );
-}
-
-function BodyContent({ slide, post, darkMode, direction, playing, narrationEnabled, narratingBlockId, pastNarrationBlockIds, narrationTime }: { slide: BodySlide; post: RecapPost; darkMode: boolean; direction: number; playing: boolean; narrationEnabled: boolean; narratingBlockId?: string; pastNarrationBlockIds: string[]; narrationTime: MotionValue<number> }) {
-  const contentRef = useRef<HTMLDivElement | null>(null);
+function BodyContent({ slide, post, darkMode, direction, playing }: { slide: BodySlide; post: RecapPost; darkMode: boolean; direction: number; playing: boolean }) {
   const visualIds = slide.blockIds.filter((id) => VISUAL_BLOCK_TYPES.has(getBlockValue(post.recordMap, id)?.type));
   const textIds = slide.blockIds.filter((id) => !visualIds.includes(id));
   const mixed = visualIds.length > 0 && textIds.length > 0;
   const grouped = mixed;
-
-  useEffect(() => {
-    const active = contentRef.current?.querySelector<HTMLElement>(".is-narrating");
-    const copyPane = active?.closest<HTMLElement>(".recap-copy-pane");
-    const pane = copyPane && copyPane.scrollHeight > copyPane.clientHeight ? copyPane : contentRef.current;
-    if (!active || !pane || pane.scrollHeight <= pane.clientHeight) return;
-    const offset = active.getBoundingClientRect().top - pane.getBoundingClientRect().top;
-    if (offset < 0 || offset + active.offsetHeight > pane.clientHeight) {
-      pane.scrollTo({ top: pane.scrollTop + offset - 12, behavior: "smooth" });
-    }
-  }, [narratingBlockId]);
 
   const renderBlock = (blockId: string) => {
     const index = slide.blockIds.indexOf(blockId);
     const block = getBlockValue(post.recordMap, blockId);
     const isImage = block?.type === "image";
     const isVisual = VISUAL_BLOCK_TYPES.has(block?.type);
-    const blockNarration = post.narration?.blocks[blockId];
-    const renderNarratedText = narrationEnabled && !isVisual && !!blockNarration;
-    const isNarrating = renderNarratedText && blockId === narratingBlockId;
-    const narrationState = isNarrating ? "active" : pastNarrationBlockIds.includes(blockId) ? "past" : "upcoming";
     return (
       <motion.div
-        className={`recap-rendered-block ${isVisual ? "is-visual" : "is-textual"} ${renderNarratedText ? "is-narration-component" : ""} ${isNarrating ? "is-narrating" : renderNarratedText ? "is-narration-idle" : ""}`}
+        className={`recap-rendered-block ${isVisual ? "is-visual" : "is-textual"}`}
         key={blockId}
         initial={isVisual ? { opacity: 0, scale: 0.9, y: 14 } : { opacity: 0, y: direction > 0 ? 30 : -30 }}
         animate={isVisual ? { opacity: 1, scale: 1, y: 0 } : { opacity: 1, y: 0 }}
         exit={isVisual ? { opacity: 0, scale: 0.96, y: -8 } : { opacity: 0, y: direction > 0 ? -24 : 24 }}
         transition={{ duration: isImage ? 0.48 : 0.34, delay: index * 0.065, ease: [0.22, 1, 0.36, 1] }}
       >
-        {renderNarratedText ? (
-          <NarratedText key={blockNarration.hash} narration={blockNarration} sourceText={getBlockPlainText(post.recordMap, blockId) || blockNarration.text} state={narrationState} narrationTime={narrationTime} />
-        ) : (
-          <NotionRenderer
-            recordMap={post.recordMap!}
-            mapImageUrl={mapPublishedImageUrl}
-            blockId={blockId}
-            components={rendererComponents}
-            fullPage={false}
-            darkMode={darkMode}
-            showTableOfContents={false}
-            isImageZoomable={false}
-          />
-        )}
+        <NotionRenderer
+          recordMap={post.recordMap!}
+          mapImageUrl={mapPublishedImageUrl}
+          blockId={blockId}
+          components={rendererComponents}
+          fullPage={false}
+          darkMode={darkMode}
+          showTableOfContents={false}
+          isImageZoomable={false}
+        />
       </motion.div>
     )
   };
@@ -505,7 +408,7 @@ function BodyContent({ slide, post, darkMode, direction, playing, narrationEnabl
       className={`recap-body-slide recap-layout-${slide.layout} ${mixed ? "has-mixed-media" : ""}`}
       style={{ "--recap-visual-max-height": `${slide.visualMaxHeight}px`, "--recap-copy-max-height": `${slide.textMaxHeight}px` } as React.CSSProperties}
     >
-      <div ref={contentRef} className="recap-notion-content">
+      <div className="recap-notion-content">
         {grouped ? (
           <>
             <div className="recap-copy-pane">{textIds.map(renderBlock)}</div>
@@ -669,12 +572,12 @@ function RecapHelpOverlay({ onClose }: { onClose: () => void }) {
               <>
                 <div className="recap-help-sound-demo">
                   <button type="button" className={`recap-help-sound-toggle ${sampleSoundEnabled ? "is-active" : ""}`} onClick={() => setSampleSoundEnabled((current) => !current)} aria-label="샘플 소리 모드 전환"><IonIcon name={sampleSoundEnabled ? "volume-high-outline" : "volume-mute-outline"} /></button>
-                  <div className={`recap-help-narration-sample ${sampleSoundEnabled ? "is-playing" : "is-muted"}`}>
-                    <span className="is-past">지금 읽고 있는 부분이 강조되고</span>
-                    <span>남은 문장은 흐리게 표시돼요</span>
+                  <div className={`recap-help-music-sample ${sampleSoundEnabled ? "is-playing" : "is-muted"}`}>
+                    <span>표지의 배경음악과</span>
+                    <span>이달의 노래를 함께 감상해요</span>
                   </div>
                 </div>
-                <div className="recap-help-copy">{helpDots}<h2>소리를 켜서<br />더 몰입감 있게</h2><p>하단 볼륨 버튼으로 소리를 켜고 끌 수 있고,<br />우측 하단 화살표를 눌러 문장을 이동할 수 있습니다.</p></div>
+                <div className="recap-help-copy">{helpDots}<h2>소리를 켜서<br />더 몰입감 있게</h2><p>하단 볼륨 버튼으로 배경음악과<br />노래 미리듣기 소리를 켜고 끌 수 있습니다.</p></div>
               </>
             )}
           </motion.section>
@@ -699,7 +602,7 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
   }, [router.isReady, router.query.document, posts]);
   const [bodyPlan, setBodyPlan] = useState<{ postId: string; slides: BodySlide[] } | null>(null);
   const [retryAttempt, setRetryAttempt] = useState(0);
-  const [recapData, setRecapData] = useState<Record<string, { sections: RecapSection[]; recordMap: any; narration?: NarrationManifest }>>({});
+  const [recapData, setRecapData] = useState<Record<string, { sections: RecapSection[]; recordMap: any }>>({});
   const [loadError, setLoadError] = useState(false);
   const [direction, setDirection] = useState(1);
   const [sectionPickerOpen, setSectionPickerOpen] = useState(false);
@@ -710,12 +613,8 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [autoplay, setAutoplay] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [narrationQueueIndex, setNarrationQueueIndex] = useState(0);
-  const narrationTime = useMotionValue(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const introAudioRef = useRef<HTMLAudioElement | null>(null);
   const musicAudioRef = useRef<HTMLAudioElement | null>(null);
-  const autoplayRef = useRef(autoplay);
   const autoplayBeforeHelpRef = useRef(false);
   const [timerEpoch, setTimerEpoch] = useState(0);
   const [propertyItemIndex, setPropertyItemIndex] = useState(0);
@@ -764,13 +663,6 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
     });
     return () => controller.abort();
   }, [musicIds]);
-  const narrationQueue = useMemo(() => activeSlide?.type === "body"
-    ? activeSlide.blockIds.flatMap((blockId) => post?.narration?.blocks[blockId] ? [{ blockId, ...post.narration.blocks[blockId] }] : [])
-    : [], [activeSlide, post?.narration]);
-  const activeNarration = narrationQueue[narrationQueueIndex];
-  const pastNarrationBlockIds = useMemo(() => soundEnabled
-    ? narrationQueue.slice(0, narrationQueueIndex).map((item) => item.blockId)
-    : [], [soundEnabled, narrationQueue, narrationQueueIndex]);
   const isCover = activeSlide.type === "cover";
   const isFullyLoaded = deckReady;
   const introUrl = useMemo(() => recapIntroUrl(post?.id), [post?.id]);
@@ -795,7 +687,7 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
   const isWatchingSingleton = activeSlide.type === "property" && activeSlide.key === "watching" && activeSlide.items.length === 1;
 
   useEffect(() => () => {
-    [audioRef.current, introAudioRef.current, musicAudioRef.current].forEach((audio) => {
+    [introAudioRef.current, musicAudioRef.current].forEach((audio) => {
       if (!audio) return;
       audio.pause();
       audio.currentTime = 0;
@@ -1074,7 +966,6 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
     setSlideIndex(next);
   }, [changePost, slideIndex, slides.length, deckReady]);
 
-  const narrationNavigationActive = soundEnabled && activeSlide.type === "body" && narrationQueue.length > 0;
   const openHelp = useCallback(() => {
     autoplayBeforeHelpRef.current = autoplay;
     if (autoplay) setAutoplay(false);
@@ -1086,35 +977,18 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
     setHelpOpen(false);
     if (shouldResume) setAutoplay(true);
   }, []);
-  const navigateFromToolbar = useCallback((delta: number) => {
-    if (narrationNavigationActive) {
-      const next = narrationQueueIndex + delta;
-      if (next >= 0 && next < narrationQueue.length) {
-        audioRef.current?.pause();
-        narrationTime.set(0);
-        setNarrationQueueIndex(next);
-        return;
-      }
-    }
-    changeSlide(delta);
-  }, [changeSlide, narrationNavigationActive, narrationQueue.length, narrationQueueIndex, narrationTime]);
-  const previousNavigatesSentence = narrationNavigationActive && narrationQueueIndex > 0;
-  const nextNavigatesSentence = narrationNavigationActive && narrationQueueIndex < narrationQueue.length - 1;
-  const previousNavigationDisabled = !previousNavigatesSentence && slideIndex === 0 && postIndex === 0;
-  const nextNavigationDisabled = !deckReady || !nextNavigatesSentence && slideIndex === slides.length - 1 && postIndex === posts.length - 1;
+  const previousNavigationDisabled = slideIndex === 0 && postIndex === 0;
+  const nextNavigationDisabled = !deckReady || slideIndex === slides.length - 1 && postIndex === posts.length - 1;
 
   const selectSection = useCallback((target: number) => {
     if (!Number.isInteger(target) || target < 0 || target >= slides.length || !slides[target]) return;
-    audioRef.current?.pause();
-    narrationTime.set(0);
-    setNarrationQueueIndex(0);
     progressRef.current = 0;
     progressMotion.set(0);
     setTimerEpoch((current) => current + 1);
     setDirection(target >= slideIndex ? 1 : -1);
     setSlideIndex(target);
     setSectionPickerOpen(false);
-  }, [narrationTime, progressMotion, slideIndex, slides]);
+  }, [progressMotion, slideIndex, slides]);
 
   useEffect(() => {
     progressRef.current = 0;
@@ -1122,69 +996,6 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
     propertyItemIndexRef.current = 0;
     setPropertyItemIndex(0);
   }, [post?.id, slideIndex, activeSlide.type, progressMotion]);
-
-  useEffect(() => { autoplayRef.current = playbackEnabled; }, [playbackEnabled]);
-
-  useEffect(() => {
-    setNarrationQueueIndex(0);
-    narrationTime.set(0);
-    audioRef.current?.pause();
-  }, [post?.id, slideIndex]);
-
-  useEffect(() => {
-    if (!soundEnabled || !activeNarration) return;
-    const audio = audioRef.current || new Audio();
-    audioRef.current = audio;
-    audio.preload = "auto";
-    audio.src = activeNarration.audioUrl;
-    audio.currentTime = 0;
-    narrationTime.set(0);
-    let frame = 0;
-    const update = () => {
-      const current = audio.currentTime;
-      narrationTime.set(current);
-      const elapsed = narrationQueue.slice(0, narrationQueueIndex).reduce((sum, item) => sum + item.duration, 0) + current;
-      const total = narrationQueue.reduce((sum, item) => sum + item.duration, 0);
-      if (total > 0) {
-        progressRef.current = Math.min(1, elapsed / total);
-        progressMotion.set(progressRef.current);
-      }
-    };
-    const tick = () => {
-      update();
-      if (!audio.paused && !audio.ended) frame = requestAnimationFrame(tick);
-    };
-    const startTick = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(tick);
-    };
-    const stopTick = () => cancelAnimationFrame(frame);
-    const ended = () => {
-      stopTick();
-      narrationTime.set(0);
-      if (narrationQueueIndex < narrationQueue.length - 1) setNarrationQueueIndex((current) => current + 1);
-      else changeSlide(1);
-    };
-    audio.addEventListener("play", startTick);
-    audio.addEventListener("pause", stopTick);
-    audio.addEventListener("ended", ended);
-    audio.load();
-    if (autoplayRef.current) audio.play().catch((error) => muteIfAutoplayBlocked(error, () => setSoundEnabled(false)));
-    return () => {
-      audio.pause();
-      stopTick();
-      audio.removeEventListener("play", startTick);
-      audio.removeEventListener("pause", stopTick);
-      audio.removeEventListener("ended", ended);
-    };
-  }, [activeNarration?.audioUrl, changeSlide, narrationQueue, narrationQueueIndex, narrationTime, progressMotion, soundEnabled]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !soundEnabled || !activeNarration) return;
-    if (playbackEnabled) audio.play().catch((error) => muteIfAutoplayBlocked(error, () => setSoundEnabled(false)));
-    else audio.pause();
-  }, [activeNarration, playbackEnabled, soundEnabled]);
 
   useEffect(() => {
     setSlideIndex((current) => {
@@ -1205,7 +1016,6 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
 
   useEffect(() => {
     if (!deckReady || slides.length < 2 || !autoplay || !documentVisible || sectionPickerOpen || postPickerOpen || postPickerClosing || helpOpen || !post || activeSlide.type === "empty") return;
-    if (soundEnabled && activeSlide.type === "body" && narrationQueue.length) return;
     const duration = getSlideDuration(activeSlide, post, soundEnabled);
     const startedAt = performance.now() - progressRef.current * duration;
     let frame = 0;
@@ -1234,18 +1044,18 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [activeSlide, autoplay, changeSlide, documentVisible, helpOpen, isFullyLoaded, narrationQueue.length, slides.length, slideIndex, post?.id, post?.recordMap, postPickerOpen, postPickerClosing, sectionPickerOpen, soundEnabled, timerEpoch]);
+  }, [activeSlide, autoplay, changeSlide, documentVisible, helpOpen, isFullyLoaded, slides.length, slideIndex, post?.id, post?.recordMap, postPickerOpen, postPickerClosing, sectionPickerOpen, soundEnabled, timerEpoch]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") { setSectionPickerOpen(false); closePostPicker(); closeHelp(); }
-      if (event.key === "ArrowLeft") navigateFromToolbar(-1);
-      if (event.key === "ArrowRight") navigateFromToolbar(1);
+      if (event.key === "ArrowLeft") changeSlide(-1);
+      if (event.key === "ArrowRight") changeSlide(1);
       if (event.key === " ") { event.preventDefault(); setAutoplay((current) => !current); }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closeHelp, closePostPicker, navigateFromToolbar]);
+  }, [closeHelp, closePostPicker, changeSlide]);
 
   if (!post) return <main className="recap-empty"><h1>표시할 월말결산이 없습니다.</h1><p>일지 카테고리의 게시물을 추가해 주세요.</p></main>;
 
@@ -1269,7 +1079,7 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
   return (
     <LayoutGroup id="recap-picker-morphs">
       <main
-        className={`recap-shell ${isCover || activePropertyKey || activeSlide.type === "body" && activeSlide.layout === "immersive" ? "has-recap-scene" : ""} ${isCover ? "has-cover-scene" : ""} ${activeSlide.type === "body" && activeSlide.layout === "immersive" ? "has-immersive-scene" : ""} ${soundEnabled ? "has-narration" : ""} ${activePropertyKey ? `has-property-scene recap-scene-${activePropertyKey} recap-scene-count-${activePropertyCount}` : ""}`}
+        className={`recap-shell ${isCover || activePropertyKey || activeSlide.type === "body" && activeSlide.layout === "immersive" ? "has-recap-scene" : ""} ${isCover ? "has-cover-scene" : ""} ${activeSlide.type === "body" && activeSlide.layout === "immersive" ? "has-immersive-scene" : ""} ${activePropertyKey ? `has-property-scene recap-scene-${activePropertyKey} recap-scene-count-${activePropertyCount}` : ""}`}
         onPointerDown={(event) => { pointerStart.current = { x: event.clientX, y: event.clientY }; }}
         onPointerUp={onPointerUp}
         onPointerCancel={() => { pointerStart.current = null; }}
@@ -1376,7 +1186,7 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
             <motion.article key={`${post.id}-${slideIndex}-${activeSlide.type}`} className="recap-slide" custom={direction} initial={isCover ? false : { opacity: 0, x: direction > 0 ? 28 : -28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: direction > 0 ? -28 : 28 }} transition={{ duration: 0.22, ease: "easeOut" }}>
               {activeSlide.type === "cover" && <RecapCover post={post} empty={deckReady && slides.length === 1} ready={deckReady} failed={loadError} onStart={() => changeSlide(1)} onRetry={() => setRetryAttempt((value) => value + 1)} />}
               {activeSlide.type === "property" && <PropertyContent slide={activeSlide} activeMusicIndex={propertyItemIndex} musicById={musicById} onToggleAutoplay={() => setAutoplay((current) => !current)} />}
-              {activeSlide.type === "body" && <BodyContent playing={playbackEnabled} slide={activeSlide} post={post} darkMode={darkMode} direction={direction} narrationEnabled={soundEnabled} narratingBlockId={soundEnabled ? activeNarration?.blockId : undefined} pastNarrationBlockIds={pastNarrationBlockIds} narrationTime={narrationTime} />}
+              {activeSlide.type === "body" && <BodyContent playing={playbackEnabled} slide={activeSlide} post={post} darkMode={darkMode} direction={direction} />}
               {activeSlide.type === "empty" && <div className="recap-empty-slide" role="status" aria-live="polite"><IonIcon name="moon-outline" /><h1>{activeSlide.title}</h1></div>}
             </motion.article>
           </AnimatePresence>
@@ -1388,25 +1198,12 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
               {section.blockIds.map((blockId) => {
                 const block = getBlockValue(post.recordMap, blockId);
                 const isVisual = VISUAL_BLOCK_TYPES.has(block?.type);
-                const blockNarration = post.narration?.blocks[blockId];
-                const measureNarration = !isVisual && !!blockNarration;
                 return (
                   <div
                     key={blockId}
                     data-recap-block={blockId}
                     className={isVisual ? "is-visual" : "is-textual"}
-                    data-recap-narration-measure={measureNarration ? "true" : undefined}
                   >
-                    {measureNarration && (
-                      <div data-recap-copy-measure>
-                        <NarratedText
-                          narration={blockNarration}
-                          sourceText={getBlockPlainText(post.recordMap, blockId) || blockNarration.text}
-                          state="upcoming"
-                          narrationTime={narrationTime}
-                        />
-                      </div>
-                    )}
                     {post.recordMap && (
                       <div data-recap-copy-measure>
                         <NotionRenderer
@@ -1432,7 +1229,7 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
           <div className="recap-toolbar-primary">
             <button
               type="button"
-              className={`recap-round-control recap-narration-control ${soundEnabled ? "is-active" : ""}`}
+              className={`recap-round-control recap-sound-control ${soundEnabled ? "is-active" : ""}`}
               aria-label={soundEnabled ? "recap 소리 끄기" : "recap 소리 켜기"}
               aria-pressed={soundEnabled}
               onClick={() => setSoundEnabled((current) => !current)}
@@ -1445,9 +1242,9 @@ export function RecapViewer({ posts }: { posts: RecapPost[] }) {
           </div>
 
           <div className="recap-toolbar-actions">
-            <button type="button" className="recap-round-control" aria-label={previousNavigatesSentence ? "이전 문장" : "이전 페이지"} disabled={previousNavigationDisabled} onClick={() => navigateFromToolbar(-1)}><IonIcon name="chevron-back-outline" /></button>
+            <button type="button" className="recap-round-control" aria-label="이전 페이지" disabled={previousNavigationDisabled} onClick={() => changeSlide(-1)}><IonIcon name="chevron-back-outline" /></button>
             <button type="button" className="recap-round-control recap-toolbar-autoplay" aria-label={autoplay ? "자동 넘김 일시정지" : "자동 넘김 재생"} aria-pressed={autoplay} onClick={() => setAutoplay((current) => !current)}><IonIcon name={autoplay ? "pause" : "play"} /></button>
-            <button type="button" className="recap-round-control" aria-label={nextNavigatesSentence ? "다음 문장" : "다음 페이지"} disabled={nextNavigationDisabled} onClick={() => navigateFromToolbar(1)}><IonIcon name="chevron-forward-outline" /></button>
+            <button type="button" className="recap-round-control" aria-label="다음 페이지" disabled={nextNavigationDisabled} onClick={() => changeSlide(1)}><IonIcon name="chevron-forward-outline" /></button>
           </div>
         </nav>
 

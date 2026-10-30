@@ -1659,12 +1659,6 @@ body:has(.recap-shell.has-recap-scene) .header-menu-button:hover {
   align-self: center;
 }
 
-.recap-body-slide .recap-rendered-block.is-narration-component+.recap-rendered-block.is-narration-component {
-  margin-top: 0;
-}
-
-.recap-body-slide .recap-narrated-text,
-.recap-measurer .recap-narrated-text,
 .recap-body-slide .notion-text,
 .recap-measurer .notion-text {
   margin: 0;
@@ -1673,18 +1667,6 @@ body:has(.recap-shell.has-recap-scene) .header-menu-button:hover {
   line-height: 1.65;
   overflow-wrap: anywhere;
   word-break: normal;
-}
-
-.recap-body-slide .recap-narrated-text,
-.recap-measurer .recap-narrated-text {
-  font-weight: 700;
-}
-
-.recap-body-slide .recap-narrated-text span,
-.recap-measurer .recap-narrated-text span {
-  display: inline;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
 }
 
 .recap-layout-hero .recap-rendered-block.is-visual {
@@ -1730,64 +1712,6 @@ body:has(.recap-shell.has-recap-scene) .header-menu-button:hover {
 
 .recap-rendered-block.is-textual {
   transition: opacity 320ms ease, filter 320ms ease, transform 420ms cubic-bezier(.22, 1, .36, 1);
-}
-
-.recap-rendered-block.is-narration-component+.recap-rendered-block.is-narration-component {
-  margin-top: clamp(20px, 2.4vh, 30px);
-}
-
-.recap-rendered-block.is-narration-idle {
-  opacity: 0.32;
-  filter: saturate(0.65);
-}
-
-.recap-rendered-block.is-narrating {
-  z-index: 2;
-  transform: scale(1.018);
-  filter: drop-shadow(0 12px 32px color-mix(in srgb, var(--primary) 18%, transparent));
-}
-
-.recap-rendered-block.is-narrating .notion-text,
-.recap-rendered-block.is-narrating .notion-header {
-  color: var(--foreground);
-  text-shadow: 0 0 24px color-mix(in srgb, var(--primary) 26%, transparent);
-}
-
-.recap-narrated-text {
-  display: block;
-  margin: 0;
-  font-size: clamp(1rem, 1.8vw, 3rem);
-  font-weight: 900;
-  line-height: 1.4;
-  white-space: pre-wrap;
-}
-
-.recap-narrated-text span {
-  display: inline-block;
-  color: transparent;
-  background: linear-gradient(90deg, var(--foreground) 0%, var(--foreground) 50%, color-mix(in srgb, var(--foreground) 22%, transparent) 50%, color-mix(in srgb, var(--foreground) 22%, transparent) 100%);
-  background-position: 100% 0;
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  will-change: auto;
-}
-
-.recap-narrated-text span.is-live {
-  will-change: background-position, transform, opacity;
-  transform: translateZ(0);
-}
-
-.recap-narrated-text span.is-past {
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--primary) 20%, transparent));
-}
-
-.recap-narrated-text span.is-active {
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--primary) 55%, transparent));
-}
-
-.recap-narrated-text span.is-upcoming {
-  filter: none;
 }
 
 .recap-toolbar {
@@ -1862,30 +1786,10 @@ body:has(.recap-shell.has-recap-scene) .header-menu-button:hover {
   cursor: default;
 }
 
-.recap-narration-control {
+.recap-sound-control {
   color: var(--primary);
   background: var(--background);
   box-shadow: 0 10px 32px color-mix(in srgb, var(--background) 34%, transparent);
-}
-
-.recap-narration-unlock {
-  position: absolute;
-  z-index: 34;
-  bottom: calc(var(--recap-toolbar-height) + 12px);
-  left: 50%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 11px 16px;
-  border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--background) 90%, transparent);
-  box-shadow: 0 12px 38px color-mix(in srgb, var(--foreground) 18%, transparent);
-  color: var(--foreground);
-  font-weight: 850;
-  transform: translateX(-50%);
-  backdrop-filter: blur(18px);
-  cursor: pointer;
 }
 
 .recap-post-bubble {
@@ -2479,7 +2383,7 @@ body:has(.recap-shell.has-recap-scene) .header-menu-button:hover {
   transform: scale(1.035);
 }
 
-.recap-help-narration-sample {
+.recap-help-music-sample {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -2491,21 +2395,12 @@ body:has(.recap-shell.has-recap-scene) .header-menu-button:hover {
   word-break: keep-all;
 }
 
-.recap-help-narration-sample span {
-  opacity: 0.28;
+.recap-help-music-sample span {
+  opacity: 1;
   transition: opacity 280ms ease, color 280ms ease;
 }
 
-.recap-help-narration-sample .is-past {
-  opacity: 0.72;
-}
-
-.recap-help-narration-sample .is-active {
-  color: var(--primary);
-  transform-origin: left center;
-}
-
-.recap-help-narration-sample.is-muted span {
+.recap-help-music-sample.is-muted span {
   opacity: 0.24;
   color: var(--foreground);
 }
@@ -3060,14 +2955,10 @@ body:has(.recap-help-overlay) header {
     font-size: clamp(2.2rem, 10vw, 3.4rem);
   }
 
-  .recap-help-narration-sample {
+  .recap-help-music-sample {
     gap: 12px;
     font-size: clamp(1.08rem, 5.4vw, 1.45rem);
     text-align: center;
-  }
-
-  .recap-help-narration-sample .is-active {
-    transform-origin: center;
   }
 
   .recap-help-footer {
@@ -3407,49 +3298,6 @@ body:has(.recap-help-overlay) header {
   }
 }
 
-.recap-cover-entry {
-  position: absolute;
-  left: 0;
-  bottom: 12px;
-  display: grid;
-  justify-items: start;
-  gap: 8px;
-  color: white;
-  text-shadow: 0 1px 4px #0008;
-}
-
-.recap-cover-entry button {
-  min-height: 44px;
-  padding: 8px 0;
-  font-size: 1rem;
-  font-weight: 650;
-  text-align: left;
-  color: inherit;
-  background: none;
-  border: 0;
-  cursor: pointer;
-}
-
-.recap-cover-entry button:disabled {
-  cursor: wait;
-  opacity: .8;
-}
-
-.recap-cover-entry span {
-  font-size: .8rem;
-}
-
-.recap-cover-entry span:empty {
-  display: none;
-}
-
-.recap-cover-entry small {
-  position: static;
-  font-size: .7rem;
-  opacity: .8;
-}
-
-.recap-cover-entry button:focus-visible,
 .recap-stack-controls button:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 4px;
@@ -3601,8 +3449,7 @@ body:has(.recap-help-overlay) header {
 
 .recap-layout-immersive .recap-copy-pane,
 .recap-layout-immersive .recap-copy-pane .notion,
-.recap-layout-immersive .recap-copy-pane .notion *,
-.recap-layout-immersive .recap-narrated-text {
+.recap-layout-immersive .recap-copy-pane .notion * {
   color: #fff !important;
 }
 
@@ -3717,7 +3564,7 @@ body:has(.recap-help-overlay) header {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(12px + var(--recap-cover-entry-height, 16px) + var(--recap-cover-title-gap));
+  bottom: calc(12px + var(--recap-cover-title-gap));
   display: flex;
   flex-direction: column;
   align-items: flex-start;

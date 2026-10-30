@@ -1,6 +1,6 @@
 import { NotionRenderer } from '../packages/notionx'
 import 'katex/dist/katex.min.css'
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Backlinks } from '../components/Backlinks'
 import { PageHead } from '../components/PageHead'
 import { motion } from 'framer-motion';
@@ -66,14 +66,6 @@ export default function Page({ pageId, recordMap, summary }) {
     const { title, category, tags, date } = usePostMetadata(pageId, recordMap);
     const readTime = useReadingTime(recordMap);
     const darkMode = useDarkMode();
-    const narrationContentRef = useRef(null);
-
-    useEffect(() => {
-        return () => {
-            speechSynthesis.cancel();
-        };
-    }, []);
-
     useEffect(() => {
         if (typeof window !== 'undefined') {
             if (window.location.pathname !== `/${pageId}`) {
@@ -114,8 +106,6 @@ export default function Page({ pageId, recordMap, summary }) {
 
             <div className='page-container'>
                 <PostHeader
-                    pageId={pageId}
-                    contentRef={narrationContentRef}
                     title={title}
                     category={category}
                     tags={tags}
@@ -124,7 +114,7 @@ export default function Page({ pageId, recordMap, summary }) {
                     summary={summary}
                 />
 
-                <motion.div variants={itemVariants} ref={narrationContentRef} className="post-narration-content">
+                <motion.div variants={itemVariants} className="post-content">
                     <NotionRenderer
                         recordMap={recordMap}
                         mapImageUrl={mapPublishedImageUrl}

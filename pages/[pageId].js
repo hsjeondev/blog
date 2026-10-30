@@ -5,7 +5,7 @@ import { Backlinks } from '../components/Backlinks'
 import { PageHead } from '../components/PageHead'
 import { motion } from 'framer-motion';
 import { Code, Collection, Equation, Modal, mapPublishedImageUrl } from '../utils/notion-components'
-import { getNotionPage, isNotionNotFound } from '../utils/get-notion-page'
+import { getNotionPage, isNotionNotFound } from '../utils/blog-data'
 
 import { usePostMetadata } from '../hooks/usePostMetadata'
 import { useReadingTime } from '../hooks/useReadingTime'

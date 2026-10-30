@@ -3,7 +3,7 @@ import 'katex/dist/katex.min.css'
 import { useEffect, useState } from 'react'
 import { calculateReadingTime } from '../../utils/readingTime'
 import { Code, Collection, Equation, Pdf, Modal, mapPublishedImageUrl } from '../../utils/notion-components'
-import { getNotionPage, isNotionNotFound } from '../../utils/get-notion-page'
+import { getNotionPage, isNotionNotFound } from '../../utils/blog-data'
 
 export async function getServerSideProps({ params, res }) {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');

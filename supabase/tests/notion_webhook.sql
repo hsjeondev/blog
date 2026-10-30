@@ -5,7 +5,7 @@ INSERT INTO blog_hook_fixture_ids (name) VALUES ('a'), ('b'), ('private'), ('sou
 GRANT SELECT ON blog_hook_fixture_ids TO anon, service_role;
 CREATE TEMP TABLE blog_hook_fixture_snapshot ON COMMIT DROP AS
 SELECT jsonb_agg(jsonb_build_object(
-  'post', jsonb_build_object('id', id, 'title', 'Sync fixture', 'author', '', 'category', '독서', 'tags', '[]'::jsonb,
+  'assets', '[]'::jsonb, 'post', jsonb_build_object('id', id, 'title', 'Sync fixture', 'author', '', 'category', '독서', 'tags', '[]'::jsonb,
     'kind', 'post', 'description', '', 'folder_path', '', 'written_at', now(), 'notion_created_at', now(), 'notion_edited_at', now()),
   'content', jsonb_build_object('record_map', jsonb_build_object('block', jsonb_build_object(id::text, jsonb_build_object('value', jsonb_build_object('id', id, 'type', 'page')))),
     'plain_text', 'Temporary fixture', 'reading_minutes', 0, 'source_edited_at', now(),

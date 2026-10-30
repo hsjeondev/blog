@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getDatabase } from '../../../utils/get-database';
-import { bookMetadata } from '../../../utils/published-notion';
+import { getDatabase } from '../../../utils/blog-data';
+import { bookMetadata } from '../../../utils/blog-data';
 import { noPublicationCache } from '../../../utils/notion-server';
-import { isNotionNotFound } from '../../../utils/get-notion-page';
+import { isNotionNotFound } from '../../../utils/blog-data';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   noPublicationCache(res);
   if (!['GET', 'POST'].includes(req.method || '')) return res.status(405).json({ error: 'method not allowed' });

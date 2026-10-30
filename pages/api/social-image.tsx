@@ -1,5 +1,5 @@
-import { bookMetadata, getPublishedPage } from '../../utils/published-notion';
-import { isNotionNotFound } from '../../utils/get-notion-page';
+import { bookMetadata, getPublishedPage, siteUrl } from '../../utils/blog-data';
+import { isNotionNotFound } from '../../utils/blog-data';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -24,6 +24,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const description = meta?.description || '';
     const tags = (meta?.tags || []).map(tag => tag.name);
     const icon = meta?.icon;
+    const iconUrl = icon?.file?.url || icon?.external?.url;
+    const absoluteIcon = iconUrl ? new URL(iconUrl, siteUrl()).href : undefined;
     const author = "프리머그의 Blog";
     const authorImage = "https://whal.eu/i/EWerYvZ7";
     const imageResponse = new ImageResponse(
@@ -98,7 +100,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
           {icon && icon.type === 'file' && (
             <img
-              src={icon.file.url}
+              src={absoluteIcon}
               style={{
                 width: '200px',
                 height: '200px',
@@ -111,7 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
           {icon && icon.type === 'external' && (
             <img
-              src={icon.external.url}
+              src={absoluteIcon}
               style={{
                 width: '200px',
                 height: '200px',

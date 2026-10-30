@@ -1,6 +1,6 @@
 import { fetchNotionBacklinks } from '../notion-backlinks';
-import { getNotionPage } from "../get-notion-page";
-import { getPublishedPage } from "../published-notion";
+import { getNotionPage } from "../blog-data";
+import { getPublishedPage } from "../blog-data";
 import { blockValue, compactNotionId, resolveBacklinkSources } from "../backlink-graph";
 import { inScope, searchContent } from "../search/search-service";
 import { normalizeFolderPath } from "../search/folders";

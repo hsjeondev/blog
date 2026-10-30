@@ -1,7 +1,7 @@
 import { PageHead } from "../../components/PageHead";
 import { RecapViewer } from "../../components/Recap/RecapViewer";
-import { getDatabase } from "../../utils/get-database";
-import { bookMetadata, publicationKind } from "../../utils/published-notion";
+import { getDatabase } from "../../utils/blog-data";
+import { bookMetadata, publicationKind } from "../../utils/blog-data";
 import { noPublicationCache } from "../../utils/notion-server";
 
 

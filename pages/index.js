@@ -3,7 +3,7 @@ import { PageHead } from "../components/PageHead";
 import Link from "next/link";
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArticleCard } from '../components/ArticleCard';
-import { publishedBooks } from "../utils/published-notion";
+import { publishedBooks } from "../utils/blog-data";
 import { noPublicationCache } from "../utils/notion-server";
 import IonIcon from "../components/Icon";
 import { useRouter } from 'next/router';

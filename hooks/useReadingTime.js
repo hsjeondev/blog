@@ -7,11 +7,15 @@ export const useReadingTime = (recordMap) => {
 
     useEffect(() => {
         if (!recordMap) return;
+        if (Number.isFinite(recordMap.reading_minutes)) {
+            setReadTime(recordMap.reading_minutes);
+            return;
+        }
 
         const text = extractTextFromRecordMap(recordMap);
         const time = calculateReadingTime(text);
         setReadTime(time);
     }, [recordMap]);
 
-    return readTime;
+    return Number.isFinite(recordMap?.reading_minutes) ? recordMap.reading_minutes : readTime;
 };

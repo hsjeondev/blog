@@ -14,9 +14,7 @@ export function notionImageThumbnail(src: string, blockId: string) {
       url.searchParams.set('w', '64'); url.searchParams.set('q', '25');
       return url.toString();
     }
-    const proxy = ['www.notion.so', 'notion.so', 'app.notion.com', 'www.notion.com'].includes(url.hostname) && url.pathname.startsWith('/image/')
-      ? url : new URL(`https://www.notion.so/image/${encodeURIComponent(src)}`);
-    proxy.searchParams.set('width', '64'); proxy.searchParams.set('id', blockId); proxy.searchParams.set('table', 'block');
-    return proxy.toString();
+    // Never route stored or external images back through Notion's image API.
+    return;
   } catch { return; }
 }

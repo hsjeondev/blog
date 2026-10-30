@@ -1,5 +1,5 @@
-import { getPublishedPage } from '../../../utils/published-notion';
-import { isNotionNotFound } from '../../../utils/get-notion-page';
+import { getPublishedPage } from '../../../utils/blog-data';
+import { isNotionNotFound } from '../../../utils/blog-data';
 import { noPublicationCache } from '../../../utils/notion-server';
 export default async function handler(req, res) {
   noPublicationCache(res);

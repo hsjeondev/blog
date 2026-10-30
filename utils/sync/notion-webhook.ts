@@ -55,6 +55,7 @@ async function syncPageDelta(store: SyncStore, source: string, worker: string, e
     let book;
     try { book = await collectPage(event.pageId, catalog, signal); }
     catch (error) { if (error.status === 404) continue; throw error; }
+    if (store.prepareBook) book = await store.prepareBook(book, signal);
     const fresh = (await getDatabase(undefined, undefined, signal)).results;
     const live = new Map(fresh.map(item => [notionId(item.id), item]));
     if (live.get(event.pageId)?.last_edited_time !== book.post.notion_edited_at

@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { bookMetadata, getPublishedPage } from '../../utils/published-notion';
+import { bookMetadata, getPublishedPage } from '../../utils/blog-data';
 import { noPublicationCache } from '../../utils/notion-server';
-import { isNotionNotFound } from '../../utils/get-notion-page';
+import { isNotionNotFound } from '../../utils/blog-data';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   noPublicationCache(res);
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' });

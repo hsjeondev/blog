@@ -73,3 +73,11 @@ test('management transport parameterizes JSON with collision-safe dollar quoting
     await createSyncStore(true).call('blog_note_sync_failure',{p_database:database,p_error:"Quotes ' ; DROP TABLE test; -- 한글 \\ path"});
   }finally{global.fetch=fetch;process.env=env;}
 });
+test('an attachment failure prevents publication and never becomes an apparent page revocation',()=>fixture(async({store,calls})=>{
+  let attempts=0;
+  store.prepareBook=async()=>{attempts++;throw Object.assign(new Error('Missing attachment'),{status:404});};
+  await assert.rejects(syncPublishedNotion(store),e=>e.status===404);
+  assert.equal(attempts,1);
+  assert.ok(!calls.some(c=>c.name==='blog_commit_notion_snapshot'||c.name==='blog_soft_delete_notion_post'));
+  assert.ok(calls.some(c=>c.name==='blog_note_sync_failure'));
+}));

@@ -10,10 +10,11 @@ const { normalizeFolderPath, folderPathFromProperty, folderAncestors, buildFolde
 const { normalizePage, searchContent, inScope, searchableBody } = require('../utils/search/search-service.ts');
 const { clientAddress, reserveUsage, agentConfigured, answerCacheKey, agentModel, missingAgentSettings, getAnswerCache, setAnswerCache } = require('../utils/agent/usage.ts');
 const { createAgentTools } = require('../utils/agent/tools.ts');
-const pageReader = require('../utils/get-notion-page.ts');
-const publication = require('../utils/published-notion.ts');
-const recordReader = require('../utils/official-record-map.ts');
-const { bodyTextCache } = require('../utils/search/body-cache.ts');
+const pageReader = require('../utils/blog-data.ts');
+const publication = require('../utils/blog-data.ts');
+const {rowFromPage,blogFixture}=require('./fixtures/blog-db.cjs');
+process.env.NEXT_PUBLIC_SUPABASE_URL='https://fixture.supabase.co';
+process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY='fixture';
 process.env.NOTION_MYBOOKLIST_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 process.env.NOTION_TOKEN = 'test-only';
 const { runSearchAgent } = require('../utils/agent/search-agent.ts');
@@ -55,94 +56,41 @@ test('normalized results retain page routes and metadata', () => {
   assert.equal(folderPathFromProperty(undefined), '');
 });
 
-test('body search reads only the published catalog and retains title results on body failure', async () => {
-  const original = global.fetch, reader = recordReader.officialRecordMap, gate = publication.getPublishedPage;
-  try {
-    bodyTextCache.clear();
-    global.fetch = async () => Response.json({ results: [page(doc, '문서')] });
-    publication.getPublishedPage = async () => page(doc, '문서');
-    recordReader.officialRecordMap = async () => ({ block: { [doc.id]:{value:{type:'page',content:['text']}},text: {value:{type:'text',properties:{title:[['본문 내용']]}}} } });
-    const result = await searchContent('본문', 'document', '개발', 30, {mode:'body'});
-    assert.equal(result.partial, false);
-    assert.equal(result.results.length, 1);
-    assert.equal(result.results[0].href, doc.href);
-    assert.match(result.results[0].excerpt, /본문/);
-    bodyTextCache.clear();
-    recordReader.officialRecordMap = async () => { throw new Error('unavailable'); };
-    assert.deepEqual((await searchContent('KMP', 'document')).results.map(item => item.id), [doc.id]);
-    assert.equal((await searchContent('missing','all','',30,{mode:'body'})).partial, true);
-  } finally { global.fetch = original; recordReader.officialRecordMap = reader; publication.getPublishedPage = gate; bodyTextCache.clear(); }
+async function withBlog(rows,run){const original=global.fetch,db=blogFixture(rows);global.fetch=db.fetch;try{await run(db);}finally{global.fetch=original;}}
+test('body search queries stored text and retains metadata on a body-query failure',()=>withBlog([rowFromPage(page(doc,'문서'))],async db=>{
+  db.texts.set(doc.id,'본문 내용');
+  const result=await searchContent('본문','document','개발',30,{mode:'body'});
+  assert.equal(result.partial,false);assert.equal(result.results[0].href,doc.href);assert.match(result.results[0].excerpt,/본문/);
+  const original=db.fetch;global.fetch=(url,init)=>new URL(url).pathname.endsWith('blog_search_public')?Response.json({code:'unavailable'},{status:503}):original(url,init);
+  const partial=await searchContent('KMP','document','',30,{mode:'body'});assert.equal(partial.partial,true);assert.equal(partial.results.length,1);
+}));
+test('book metadata search needs one database metadata query, including author and category',async()=>{
+  const book=rowFromPage(page({...doc,title:'픽사 스토리텔링'},'포스트'));book.author='매튜 룬';book.category='기획';
+  await withBlog([book],async db=>{for(const q of ['픽사','매튜','기획']){const before=db.calls.length;assert.equal((await searchContent(q)).results[0].title,'픽사 스토리텔링');assert.equal(db.calls.length-before,1);}assert.ok(db.calls.every(c=>c.name==='blog_read_catalog'));});
 });
-
-test('book metadata search needs one query and no bodies, including author and category', async()=>{
-  const original=global.fetch,reader=recordReader.officialRecordMap;
-  try {
-    const book=page({...doc,title:'픽사 스토리텔링'},'포스트');
-    book.properties.저자={rich_text:[{plain_text:'매튜 룬'}]};
-    book.properties.분류={select:{name:'기획'}};
-    let calls=0;
-    global.fetch=async()=>{calls++;return Response.json({results:[book]});};
-    recordReader.officialRecordMap=async()=>assert.fail('metadata searches must not read bodies');
-    for(const query of ['픽사','매튜','기획']) {
-      const before=calls,result=await searchContent(query);
-      assert.equal(calls-before,1);
-      assert.deepEqual(result.results.map(r=>r.title),['픽사 스토리텔링']);
-    }
-  } finally {global.fetch=original;recordReader.officialRecordMap=reader;}
+test('stored body search covers more than twenty books in one query without reading record maps',async()=>{
+  const books=Array.from({length:23},(_,i)=>rowFromPage(page({...doc,id:(i+1).toString(16).padStart(8,'0')+'-1111-4111-8111-111111111111',title:'책 '+i},'포스트')));
+  await withBlog(books,async db=>{
+    db.texts.set(books[22].id,'마지막 본문의 검색어');
+    const result=await searchContent('검색어','all','',50,{mode:'body'});
+    assert.equal(result.nextCursor,null);assert.equal(result.scanned,23);assert.deepEqual(result.results.map(r=>r.id),[books[22].id]);
+    assert.equal(db.calls.filter(c=>c.name==='blog_search_public').length,1);assert.ok(!db.calls.some(c=>c.name==='blog_read_page'));
+    db.rows[22].is_published=false;
+    const revoked=await searchContent('검색어','all','',50,{mode:'body'});assert.equal(revoked.results.length,0);assert.ok(!(books[22].id in revoked.live));
+  });
 });
-
-test('body search covers more than twenty books in bounded batches and reuses revision-keyed text',async()=>{
-  const original=global.fetch,reader=recordReader.officialRecordMap,gate=publication.getPublishedPage;
-  try {
-    bodyTextCache.clear();
-    const books=Array.from({length:23},(_,i)=>page({...doc,id:(i+1).toString(16).padStart(8,'0')+'-1111-4111-8111-111111111111',title:'책 '+i},'포스트'));
-    global.fetch=async()=>Response.json({results:books});
-    publication.getPublishedPage=async id=>books.find(b=>b.id===id);
-    let reads=0;
-    recordReader.officialRecordMap=async p=>{reads++;return {block:{[p.id]:{value:{type:'page',content:['text']}},text:{value:{type:'text',properties:{title:[[p.id===books[22].id?'마지막 본문의 검색어':'다른 문장']]}}}}};};
-    let cursor='',found=[],steps=0;
-    do {
-      const before=reads,result=await searchContent('검색어','all','',50,{mode:'body',cursor});
-      assert.ok(reads-before<=2);found.push(...result.results);cursor=result.nextCursor||'';steps++;
-    } while(cursor);
-    assert.equal(steps,12);assert.equal(reads,23);assert.deepEqual(found.map(r=>r.id),[books[22].id]);
-    await searchContent('문장','all','',50,{mode:'body'});assert.equal(reads,23);
-    books[0].last_edited_time='2026-10-30T10:00:00Z';
-    await searchContent('문장','all','',50,{mode:'body'});assert.equal(reads,24);
-    books[0].properties.공개.checkbox=false;
-    const hidden=await searchContent('문장','all','',50,{mode:'body'});
-    assert.ok(!hidden.results.some(r=>r.id===books[0].id));assert.ok(!(books[0].id in hidden.live));
-  } finally {global.fetch=original;recordReader.officialRecordMap=reader;publication.getPublishedPage=gate;bodyTextCache.clear();}
-});
-
-test('body search does not return excerpts when publication revalidation fails',async()=>{
-  const original=global.fetch,reader=recordReader.officialRecordMap,gate=publication.getPublishedPage;
-  try {
-    bodyTextCache.clear();let calls=0;
-    global.fetch=async()=>{if(++calls===2)throw new Error('Notion unavailable');return Response.json({results:[page(doc,'문서')]});};
-    publication.getPublishedPage=async()=>page(doc,'문서');
-    recordReader.officialRecordMap=async()=>({block:{[doc.id]:{value:{type:'page',content:['text']}},text:{value:{type:'text',properties:{title:[['검색어']]}}}}});
-    await assert.rejects(searchContent('검색어','all','',30,{mode:'body'}),/Notion unavailable/);
-  } finally {global.fetch=original;recordReader.officialRecordMap=reader;publication.getPublishedPage=gate;bodyTextCache.clear();}
-});
-
-test('unpublishing during a body read prevents both the result and a reusable cache entry',async()=>{
-  const original=global.fetch,reader=recordReader.officialRecordMap,gate=publication.getPublishedPage;
-  try {
-    bodyTextCache.clear();const book=page(doc,'문서');let reads=0;
-    global.fetch=async()=>Response.json({results:[book]});
-    publication.getPublishedPage=async()=>book;
-    recordReader.officialRecordMap=async()=>{
-      reads++;if(reads===1)book.properties.공개.checkbox=false;
-      return {block:{[doc.id]:{value:{type:'page',content:['text']}},text:{value:{type:'text',properties:{title:[['검색어가 있는 본문']]}}}}};
-    };
-    const revoked=await searchContent('검색어','all','',30,{mode:'body'});
-    assert.deepEqual(revoked.results,[]);assert.deepEqual(revoked.live,{});
-    book.properties.공개.checkbox=true;
-    const visible=await searchContent('검색어','all','',30,{mode:'body'});
-    assert.equal(visible.results.length,1);assert.equal(reads,2);
-  } finally {global.fetch=original;recordReader.officialRecordMap=reader;publication.getPublishedPage=gate;bodyTextCache.clear();}
-});
+test('body excerpts are withheld if the fresh publication query fails',()=>withBlog([rowFromPage(page(doc,'문서'))],async db=>{
+  db.texts.set(doc.id,'검색어');let catalogs=0;const original=db.fetch;
+  global.fetch=async(url,init)=>{if(new URL(url).pathname.endsWith('blog_read_catalog')&&++catalogs===2)throw new Error('Database unavailable');return original(url,init);};
+  await assert.rejects(searchContent('검색어','all','',30,{mode:'body'}),/Database unavailable/);
+}));
+test('unpublishing during a database body search prevents excerpt release without caching old text',()=>withBlog([rowFromPage(page(doc,'문서'))],async db=>{
+  db.texts.set(doc.id,'검색어가 있는 본문');const original=db.fetch;let first=true;
+  global.fetch=async(url,init)=>{const r=await original(url,init);if(new URL(url).pathname.endsWith('blog_search_public')&&first){first=false;db.rows[0].is_published=false;}return r;};
+  const revoked=await searchContent('검색어','all','',30,{mode:'body'});assert.deepEqual(revoked.results,[]);assert.deepEqual(revoked.live,{});
+  db.rows[0].is_published=true;assert.equal((await searchContent('검색어','all','',30,{mode:'body'})).results.length,1);
+  assert.equal(db.calls.filter(c=>c.name==='blog_search_public').length,2);
+}));
 
 test('search cache text excludes referenced page titles and unrelated map entries',()=>{
   const map={block:{
@@ -262,7 +210,7 @@ test('Responses function loop reads evidence then streams answer with server-own
     process.env.OPENAI_API_KEY = 'test-no-network'; delete process.env.SEARCH_AGENT_MODEL;
     pageReader.getNotionPage = async (id) => ({ block: { [id]: { value: { type: 'page', content: ['text'] } }, text: { value: { type: 'text', properties: { title: [['KMP shared code']] } } } } });
     global.fetch = async (url, init) => {
-      if (!String(url).includes('api.openai.com')) return Response.json({ results: [page(doc, '문서')], recordMap: {} });
+      if (!String(url).includes('api.openai.com')) return blogFixture([rowFromPage(page(doc,'문서'))]).fetch(url,init);
       const body = JSON.parse(init.body);
       assert.equal(body.store, false);
       assert.equal(body.model, "gpt-5.6-terra");
@@ -295,8 +243,8 @@ test('agent stops at eight tool calls and returns an evidence-free answer withou
   let calls = 0;
   try {
     process.env.OPENAI_API_KEY = 'test-no-network'; process.env.SEARCH_AGENT_MODEL = 'test';
-    global.fetch = async (url) => {
-      if (!String(url).includes('api.openai.com')) return Response.json({ results: [page(doc, '문서')], recordMap: {} });
+    global.fetch = async (url,init) => {
+      if (!String(url).includes('api.openai.com')) return blogFixture([rowFromPage(page(doc,'문서'))]).fetch(url,init);
       calls++;
       return Response.json({ id: `r${calls}`, object: 'response', status: 'completed', output: [{ type: 'function_call', id: `fc${calls}`, call_id: `call${calls}`, name: 'search_content', arguments: '{"query":"KMP"}' }] });
     };

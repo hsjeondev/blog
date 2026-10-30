@@ -16,15 +16,7 @@ test('image geometry is available before load and prefers intrinsic preview dime
   }
 });
 
-test('low-resolution URLs retain Notion identifiers and use image services without modifying original URLs', () => {
-  const src = 'https://www.notion.so/image/example?table=block&id=old&cache=v2';
-  const preview = new URL(notionImageThumbnail(src, 'document-id'));
-  assert.equal(preview.searchParams.get('width'), '64');
-  assert.equal(preview.searchParams.get('id'), 'document-id');
-  assert.equal(preview.searchParams.get('cache'), 'v2');
-  const external = new URL(notionImageThumbnail('https://example.com/image.png', 'document-id'));
-  assert.equal(external.hostname, 'www.notion.so');
-  assert.equal(decodeURIComponent(external.pathname.slice('/image/'.length)), 'https://example.com/image.png');
-  assert.equal(new URL(notionImageThumbnail('https://images.unsplash.com/photo?fit=crop', 'id')).searchParams.get('w'), '64');
-  for (const src of ['data:image/png;base64,AAA', 'javascript:alert(1)', 'invalid']) assert.equal(notionImageThumbnail(src, 'id'), undefined);
+test('thumbnails use direct image services and never route stored media through Notion',()=>{
+  assert.equal(new URL(notionImageThumbnail('https://images.unsplash.com/photo?fit=crop','id')).searchParams.get('w'),'64');
+  for(const src of ['/api/blog-media/id/hash','https://www.notion.so/image/example','https://example.com/image.png','data:image/png;base64,AAA','javascript:alert(1)','invalid'])assert.equal(notionImageThumbnail(src,'id'),undefined);
 });

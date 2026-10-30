@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { noPublicationCache } from '../../utils/notion-server';
-import { isNotionNotFound } from '../../utils/get-notion-page';
+import { isNotionNotFound } from '../../utils/blog-data';
 import { fetchNotionBacklinks } from '../../utils/notion-backlinks';
 
 export default async (req: NextApiRequest, res: NextApiResponse) => {

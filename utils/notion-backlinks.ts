@@ -1,5 +1,5 @@
 export async function fetchNotionBacklinks(currentId: string, signal?: AbortSignal, cursor?: string) {
-  const { getPublishedPage } = await import('./published-notion');
+  const { getPublishedPage } = await import('./blog-data');
   const { notionId } = await import('./notion-server');
   await getPublishedPage(currentId, signal);
   const { buildGraphData } = await import('./build-graph-data');

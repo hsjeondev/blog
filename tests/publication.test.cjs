@@ -19,12 +19,15 @@ const { searchContent } = require('../utils/search/search-service.ts');
 const { buildGraphData } = require('../utils/build-graph-data.ts');
 const { fetchNotionBacklinks } = require('../utils/notion-backlinks.ts');
 const { mergeGraphBatch, adjacentGraph } = require('../utils/connection-graph.ts');
+const {commentReferences}=require('../utils/comment-references.ts');
+const {rowFromPage,blogFixture}=require('./fixtures/blog-db.cjs');
 const { database, ids, upstream } = require('./fixtures/notion-api.cjs');
 const [published, hidden, target, text, image, nested, row, table, child, linked, synced] = ids;
 async function withFixture(run) {
   const previous={...process.env},fetch=global.fetch;
-  Object.assign(process.env,{NOTION_TOKEN:'fixture-integration',NOTION_MYBOOKLIST_ID:database});delete process.env.NOTION_API_KEY;
-  const fixture=upstream();global.fetch=fixture.fetch;
+  Object.assign(process.env,{NOTION_TOKEN:'fixture-integration',NOTION_MYBOOKLIST_ID:database,NEXT_PUBLIC_SUPABASE_URL:'https://fixture.supabase.co',NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:'fixture'});delete process.env.NOTION_API_KEY;
+  const fixture=upstream();fixture.db=blogFixture(fixture.pages.map(rowFromPage));fixture.db.links=[{source:published,target,kind:'reference'}];
+  global.fetch=(url,init)=>new URL(url).hostname==='api.notion.com'?fixture.fetch(url,init):fixture.db.fetch(url,init);
   try {await run(fixture);} finally {global.fetch=fetch;process.env=previous;}
 }
 function response() {return {headers:{},statusCode:200,setHeader(k,v){this.headers[k]=v;return this;},status(n){this.statusCode=n;return this;},json(body){this.body=body;return this;},end(body){this.body=body;return this;}};}
@@ -140,7 +143,7 @@ test('private, archived, missing-public-property and foreign-database records ar
 
 test('unpublishing takes effect on the next detail, search and graph request',()=>withFixture(async f=>{
   await getNotionPage(published);
-  f.pages[0].properties.공개.checkbox=false;
+  f.pages[0].properties.공개.checkbox=false;f.db.rows[0].is_published=false;
   await assert.rejects(getNotionPage(published),e=>e.status===404);
   assert.ok(!(await publishedBooks()).some(p=>p.id===published));
   assert.equal((await searchContent('공개 책')).results.length,0);
@@ -189,10 +192,10 @@ test('comment graph never reads bodies or exposes comment text, authors or priva
   const graph=await buildGraphData();
   assert.ok(graph.links.some(e=>e.source===published&&e.target===target&&e.kind==='reference'));
   assert.ok(f.calls.every(c=>!c.path.startsWith('/v1/blocks/')&&!c.path.startsWith('/v1/pages/')));
-  assert.equal(f.calls.filter(c=>c.path==='/v1/comments').length,2);
+  assert.equal(f.calls.length,0);assert.equal(f.db.calls.filter(c=>c.name==='blog_read_graph').length,1);
   for(const secret of ['PRIVATE_COMMENT_TEXT','PRIVATE_COMMENT_AUTHOR','PRIVATE_TITLE',hidden]) assert.ok(!JSON.stringify(graph).includes(secret));
   // Body mentions still exist, but deleting the comment removes the graph edge.
-  f.comments.set(published,[]);
+  f.db.links=[];
   assert.equal((await buildGraphData()).links.filter(e=>e.kind==='reference').length,0);
 }));
 
@@ -207,12 +210,11 @@ test('comment references paginate and accept only distinct published page mentio
       {parent:{block_id:text},rich_text:[{type:'mention',mention:{page:{id:published}}}]},
     ],has_more:false});
   };
-  const graph=await buildGraphData();
-  assert.deepEqual(graph.links.filter(e=>e.kind==='reference'),[{source:published,target,kind:'reference'}]);
+  assert.deepEqual(await commentReferences(published,new Set([published,target])),[target]);
 }));
 
 test('graph batches stay bounded, merge in both directions and remove revoked nodes and edges',()=>withFixture(async f=>{
-  for(let i=0;i<7;i++)f.pages.push({...structuredClone(f.pages[2]),id:ids[i+3]});
+  for(let i=0;i<7;i++)f.db.rows.push({...structuredClone(f.db.rows[2]),id:ids[i+3]});
   let cursor='',graph={nodes:[],links:[]},steps=0;
   do {
     const before=f.calls.length;
@@ -220,10 +222,10 @@ test('graph batches stay bounded, merge in both directions and remove revoked no
     assert.ok(f.calls.slice(before).filter(c=>c.path==='/v1/comments').length<=4);
     graph=mergeGraphBatch(graph,batch);cursor=batch.nextCursor||'';steps++;
   } while(cursor);
-  assert.equal(steps,3);
+  assert.equal(steps,1);
   for(const current of [published,target])assert.equal(adjacentGraph(graph,current).links.length,1);
   const first=await buildGraphData(undefined,{cursor:'',focus:target});
-  f.pages[0].properties.공개.checkbox=false;
+  f.db.rows[0].is_published=false;
   const restart=await buildGraphData(undefined,{cursor:first.nextCursor,focus:target});
   assert.equal(restart.reset,true);
   graph=mergeGraphBatch(graph,restart);
@@ -231,18 +233,12 @@ test('graph batches stay bounded, merge in both directions and remove revoked no
   assert.ok(!graph.links.some(e=>e.source===published||e.target===published));
 }));
 
-test('revocation during comment reads filters links, and comment permission failures are not empty success',()=>withFixture(async f=>{
-  const original=f.fetch;
-  global.fetch=async(url,init)=>{
-    const result=await original(url,init);
-    if(new URL(url).pathname==='/v1/comments')f.pages[2].properties.공개.checkbox=false;
-    return result;
-  };
+test('stored graph respects revocation and database failures do not become an empty success',()=>withFixture(async f=>{
+  f.db.rows[2].is_published=false;
   const graph=await buildGraphData();
-  assert.ok(!graph.nodes.some(n=>n.id===target));
-  assert.equal(graph.links.filter(e=>e.kind==='reference').length,0);
-  global.fetch=async(url,init)=>new URL(url).pathname==='/v1/comments'?Response.json({code:'restricted_resource'},{status:403}):original(url,init);
-  await assert.rejects(buildGraphData(),error=>error.status===403);
+  assert.ok(!graph.nodes.some(n=>n.id===target));assert.equal(graph.links.filter(e=>e.kind==='reference').length,0);
+  global.fetch=async()=>Response.json({code:'42501'},{status:403});
+  await assert.rejects(buildGraphData(),error=>error.status===502&&error.upstreamStatus===403);
 }));
 
 test('public comment API is disabled for published pages and never reads or writes Notion comments',()=>withFixture(async f=>{

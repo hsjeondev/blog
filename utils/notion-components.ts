@@ -25,8 +25,9 @@ const Modal = dynamic(
 )
 
 export { Code, Collection, Equation, Pdf, Modal }
-// Official API attachment URLs are already signed; preserve them for private Notion pages.
+// Stored media paths are authorized by the blog media proxy on every request.
 export function mapPublishedImageUrl(url: string | undefined) {
     if (!url) return undefined;
+    if (/^\/api\/blog-media\/[a-f0-9-]{36}\/[a-f0-9]{64}$/.test(url)) return url;
     try { return ['https:', 'http:'].includes(new URL(url).protocol) ? url : undefined; } catch { return undefined; }
 }

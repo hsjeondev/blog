@@ -1,4 +1,4 @@
-import { getNotionPage, isNotionNotFound } from '../../../utils/get-notion-page';
+import { getNotionPage, isNotionNotFound } from '../../../utils/blog-data';
 import { noPublicationCache } from '../../../utils/notion-server';
 import { prepareRecapRecordMap } from "../../../utils/recap-record-map";
 

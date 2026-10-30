@@ -1,9 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import type { SyncStore } from './notion-sync';
+import { createAssetMirror } from './blog-assets';
 
 const functions = new Set(['blog_sync_started_at', 'blog_commit_notion_snapshot', 'blog_soft_delete_notion_post', 'blog_note_sync_failure',
   'blog_store_webhook_verification', 'blog_enqueue_notion_event', 'blog_claim_notion_event', 'blog_finish_notion_event',
-  'blog_release_notion_worker', 'blog_commit_notion_page', 'blog_commit_notion_graph', 'blog_retry_failed_notion_events']);
+  'blog_release_notion_worker', 'blog_commit_notion_page', 'blog_commit_notion_graph', 'blog_retry_failed_notion_events', 'blog_sync_asset_cache']);
 
 // Administrative CLI transport only. Application workers must use a server
 // secret/service-role key and the ordinary RPC transport below, never the PAT.
@@ -12,7 +13,7 @@ export function createSyncStore(management = false): SyncStore {
   const secret = process.env.SUPABASE_SECRET_KEY?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   const token = process.env.SUPABASE_ACCESS_TOKEN?.trim();
   if (management ? !token : !secret) throw new Error('Supabase sync credentials are not configured');
-  return { async call(name, args, signal) {
+  const store: SyncStore = { async call(name, args, signal) {
     if (!functions.has(name)) throw new Error('Unsupported sync function');
     let target: string;
     let options: RequestInit;
@@ -39,4 +40,6 @@ export function createSyncStore(management = false): SyncStore {
     if (management && (!Array.isArray(data) || !data[0] || !Object.hasOwn(data[0], 'result'))) throw new Error('Invalid synchronization response');
     return management ? data[0].result : data;
   } };
+  store.prepareBook = createAssetMirror(store, management);
+  return store;
 }

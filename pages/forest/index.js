@@ -1,6 +1,6 @@
 import { PageHead } from '../../components/PageHead';
 import { ForestExplorer } from '../../components/Forest/ForestExplorer';
-import { publishedBooks } from '../../utils/published-notion';
+import { publishedBooks } from '../../utils/blog-data';
 import { noPublicationCache } from '../../utils/notion-server';
 
 export async function getServerSideProps({ res }) {

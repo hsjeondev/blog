@@ -1,4 +1,4 @@
-import { publishedBooks, siteUrl } from '../utils/published-notion';
+import { publishedBooks, siteUrl } from '../utils/blog-data';
 import { noPublicationCache } from '../utils/notion-server';
 import type { GetServerSideProps } from 'next';
 export const getServerSideProps: GetServerSideProps = async ({ res }) => {

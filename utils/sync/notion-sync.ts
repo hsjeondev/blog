@@ -3,13 +3,14 @@ import { bookMetadata, getPublishedPage } from '../published-notion';
 import { bookDatabaseId, isPublishedBook, notionId, notionRequest } from '../notion-server';
 import { officialRecordMap } from '../official-record-map';
 import { commentReferences } from '../comment-references';
-import { searchableBody } from '../search/search-service';
+import { searchableBody } from '../record-map-text';
 import { calculateReadingTime } from '../readingTime';
 
 export interface SyncStore {
   call(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<any>;
+  prepareBook?: (book: SyncBook, signal?: AbortSignal) => Promise<SyncBook>;
 }
-export type SyncBook = { post: any; content: any; links: string[] };
+export type SyncBook = { post: any; content: any; links: string[]; assets?: any[] };
 type Progress = (value: { phase: string; processed?: number; total?: number; id?: string }) => void;
 
 function storedBook(page: any, map: any, links: string[]): SyncBook {
@@ -55,8 +56,16 @@ export async function syncPublishedNotion(store: SyncStore, signal?: AbortSignal
         const staleReference = previous?.content.referenced_page_ids.some((id: string) => !allowed.has(id)
           || previous.content.record_map.block[id]?.value?.blog_metadata?.lastEditedTime !== allowed.get(id)?.lastEditedTime);
         if (previous && previous.post.notion_edited_at === item.lastEditedTime && !staleReference) continue;
-        try { captured.set(item.id, await collectPage(item.id, catalog, signal)); }
-        catch (error) { if (error.status !== 404) throw error; captured.delete(item.id); }
+        let book: SyncBook;
+        try { book = await collectPage(item.id, catalog, signal); }
+        catch (error) {
+          if (error.status !== 404) throw error;
+          captured.delete(item.id);
+          continue;
+        }
+        // A missing attachment is a failed snapshot, not evidence that its
+        // parent page became private. Only page collection may retry a 404.
+        captured.set(item.id, store.prepareBook ? await store.prepareBook(book, signal) : book);
         progress({ phase: 'body', processed: captured.size, total: catalog.length, id: item.id });
       }
       raw = (await getDatabase(undefined, undefined, signal)).results;

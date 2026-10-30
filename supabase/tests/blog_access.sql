@@ -14,6 +14,8 @@ SELECT fixture.id, source.id, 'Schema test: ' || fixture.name, now(), now(), now
 FROM blog_fixture_ids fixture CROSS JOIN blog_fixture_ids source
 WHERE source.name = 'source' AND fixture.name NOT IN ('source', 'event');
 
+UPDATE public.blog_posts SET assets_ready=true WHERE id IN (SELECT id FROM blog_fixture_ids);
+
 INSERT INTO public.blog_post_contents (post_id, record_map, plain_text, source_edited_at)
 SELECT id, '{"block":{}}'::jsonb, 'Temporary access-policy fixture', now()
 FROM blog_fixture_ids WHERE name NOT IN ('source', 'event');

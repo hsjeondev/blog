@@ -68,7 +68,7 @@ export const Header: React.FC = () => {
                     >
                         <IonIcon name="menu-outline" />
                     </button>
-                    <Link href="/" className="no-underline text-inherit">
+                    <Link href="/" className="header-brand no-underline text-inherit">
                         <h3 className="text-sm m-0 font-black">프리머그의 Blog</h3>
                     </Link>
                     <nav className="header-navigation" aria-label="주요 메뉴">
@@ -169,10 +169,9 @@ export const Header: React.FC = () => {
                             />
                             <motion.div
                                 className="mobile-menu-panel"
-                                style={{ width: '60%', top: "-25px" }}
-                                initial={{ opacity: 0, scale: 0.5, x: "-45%", y: -18 }}
-                                animate={{ opacity: 1, scale: 0.75, x: "-35%", y: 0 }}
-                                exit={{ opacity: 0, scale: 0.5, x: "-35%", y: -18 }}
+                                initial={{ opacity: 0, scale: 0.98, x: -16, y: -8 }}
+                                animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.98, x: -16, y: -8 }}
                                 transition={{ type: "spring", stiffness: 380, damping: 32 }}
                             >
                                 <nav className="mobile-menu-options" aria-label="모바일 주요 메뉴">

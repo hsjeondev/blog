@@ -40,7 +40,7 @@ export const PostHeader = ({ title, author, category, tags, date, readTime, summ
 
             <motion.div
                 variants={itemVariants}
-                className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1"
+                className="post-title-row mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1"
             >
                 <motion.h2 layoutId={`title-${title}`} className="m-0 min-w-0 max-w-full">
                     <BlurText

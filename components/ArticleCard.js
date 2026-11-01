@@ -122,10 +122,10 @@ export const ArticleCard = ({ post, onClick, coverPriority = false }) => {
                 onError={() => setFailedCover(bookCover)}
             />}
 
-            <motion.div className="article-card-content relative z-10 flex flex-col h-full">
+            <motion.div className="article-card-content relative z-10 flex flex-col h-full min-w-0">
                 <motion.div
                     layoutId={`category-${post.id}`}
-                    className="flex items-center gap-2 mb-4 font-bold"
+                    className="flex items-center gap-2 mb-4 font-bold min-w-0 break-words"
                 >
                     <span
                         style={{

@@ -1,11 +1,14 @@
-import { supabaseRead } from './supabase-http';
+import { supabaseReadAll as supabaseRead } from './supabase-http';
 import { bookDatabaseId, notionId, notPublished } from './notion-server';
 export { bookMetadata, propertyText, publicationKind, siteUrl } from './book-metadata';
 
 export function rowMetadata(row: any) {
-  return { id: row.id, title: row.title, author: row.author, category: row.category, tags: row.tags || [], date: new Date(row.written_at).toISOString(),
+  return { id: row.id, source: row.notion_database_id === bookDatabaseId() ? 'books' : 'writing', title: row.title, author: row.author, category: row.category, tags: row.tags || [], date: new Date(row.written_at).toISOString(),
     createdTime: new Date(row.notion_created_at).toISOString(), lastEditedTime: new Date(row.notion_edited_at).toISOString(),
     icon: row.icon || null, cover: row.cover || null, description: row.description || '', folderPath: row.folder_path || '', kind: row.kind };
+}
+export async function sectionPosts(section: 'books' | 'writing', signal?: AbortSignal) {
+  return (await publishedBooks(signal)).filter(post => post.kind === 'post' && post.source === section);
 }
 function pageShape(row: any) {
   const rich = (text: string) => ({ type: 'rich_text', rich_text: [{ plain_text: text }] });
@@ -20,7 +23,7 @@ function pageShape(row: any) {
 export async function publishedBooks(signal?: AbortSignal) {
   const rows = await supabaseRead('blog_read_catalog', { p_database: bookDatabaseId() }, signal);
   if (!Array.isArray(rows)) throw new Error('Invalid blog catalog');
-  return rows.map(rowMetadata);
+  return rows.map(rowMetadata).sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || Date.parse(b.createdTime) - Date.parse(a.createdTime) || a.id.localeCompare(b.id));
 }
 // Legacy metadata adapters keep existing views compatible without calling Notion.
 export async function getDatabase(databaseId = bookDatabaseId(), _body: any = {}, signal?: AbortSignal) {

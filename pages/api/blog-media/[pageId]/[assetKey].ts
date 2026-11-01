@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { bookDatabaseId, notionId, noPublicationCache } from '../../../../utils/notion-server';
-import { supabaseRead, supabaseUrl, supabaseHeaders, storageServiceKey } from '../../../../utils/supabase-http';
+import { supabaseReadAll as supabaseRead, supabaseUrl, supabaseHeaders, storageServiceKey } from '../../../../utils/supabase-http';
 
 export default async function handler(req: NextApiRequest,res: NextApiResponse) {
   noPublicationCache(res);

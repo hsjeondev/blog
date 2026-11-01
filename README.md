@@ -395,3 +395,22 @@ salt는 `openssl rand -hex 32`로 생성한 값을 `SEARCH_AGENT_IP_SALT`에 등
 3. private Blob store와 Cron 설정을 확인합니다.
 4. `yarn build`가 성공하는지 확인하고 배포합니다.
 5. `/`, `/forest`, `/recap`, `/graph`, 임의의 `/[pageId]`를 확인합니다.
+
+## 여러 Notion 데이터베이스 연결
+
+기존 `NOTION_MYBOOKLIST_ID`는 독서 글 원본으로 유지합니다. 추가 글 원본은 서버 환경변수 `NOTION_BLOG_DATABASE_ID`로 연결합니다.
+새 블로그 DB: `aac45ada-0609-41d4-a0a5-f6e1a094062e` (데이터 소스: `5e6c8e08-274c-423b-8ccc-cfa2c7ab002f`).
+
+- 새 DB에는 `제목`(제목), `카테고리`(선택), `공개`(체크박스), `작성일`(날짜), `진행상태`(선택), `태그`(다중 선택), `설명`(텍스트)을 사용합니다.
+- 카테고리 항목은 Notion에서 자유롭게 추가합니다. 공개 글에 선택한 이름은 동기화 시 `blog_posts.category`에 그대로 저장됩니다. 카테고리 옵션만 만들고 글에 선택하지 않으면 사이트에 별도 카테고리 레코드를 만들지는 않습니다.
+- `진행상태`는 작성 관리용이며 발행 조건은 `공개` 체크입니다. 빈 카테고리는 새 DB에서 `미분류`, 기존 독서 DB에서 `독서`로 표시합니다.
+- 목록·본문·검색·그래프·첨부파일 조회는 두 원본을 함께 읽되 기존 DB별 공개 검사와 RLS를 유지합니다. 전체 동기화와 웹훅의 목록 대조·공개 해제도 각 DB 범위 안에서만 처리합니다.
+- 원본 DB 사이의 본문 멘션/댓글 연결은 수집하지 않습니다. 기존 SQL은 한 원본 안의 공개 참조만 허용합니다. 기존 페이지를 다른 DB로 이동하는 마이그레이션은 이 연결의 범위에 포함하지 않습니다.
+
+운영 연결 순서:
+
+1. Notion 새 DB의 연결에 기존 **Notion Book List API** 통합을 추가합니다. 채팅의 Notion 앱 권한과 블로그 API 통합 권한은 별개입니다.
+2. 해당 통합의 웹훅 구독이 새 DB의 페이지 변경 이벤트도 수신하는지 확인합니다.
+3. 코드 변경과 함께 Vercel Production에 `NOTION_BLOG_DATABASE_ID=aac45ada-0609-41d4-a0a5-f6e1a094062e`를 설정하고 배포합니다. 기존 `NOTION_MYBOOKLIST_ID`는 유지합니다.
+4. 기존 공개 글도 가져오려면 같은 환경변수로 `npm run sync:notion`을 실행합니다. 새 DB가 비어 있으면 기존 독서 글은 그대로 유지됩니다.
+5. 새 DB에서 글을 공개하고 `blog_sync_events`의 새 DB 작업과 `blog_posts.notion_database_id`, `category`를 확인합니다.

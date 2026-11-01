@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { timingSafeEqual } from 'node:crypto';
-import { bookDatabaseId, noPublicationCache } from '../../../utils/notion-server';
+import { blogDatabaseIds, noPublicationCache } from '../../../utils/notion-server';
 import { createSyncStore } from '../../../utils/sync/supabase-store';
 import { drainNotionEvents } from '../../../utils/sync/notion-webhook';
 
@@ -13,8 +13,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return res.status(401).json({ error: 'Unauthorized' });
   try {
     const store = createSyncStore();
-    await store.call('blog_retry_failed_notion_events', { p_database: bookDatabaseId() });
-    const complete = await drainNotionEvents(store, AbortSignal.timeout(45_000));
+    const signal = AbortSignal.timeout(45_000);
+    let complete = true;
+    for (const source of blogDatabaseIds()) {
+      await store.call('blog_retry_failed_notion_events', { p_database: source });
+      complete = await drainNotionEvents(store, signal, source) && complete;
+    }
     return res.status(complete ? 200 : 503).json({ complete });
   } catch { return res.status(503).json({ error: 'Retry unavailable' }); }
 }

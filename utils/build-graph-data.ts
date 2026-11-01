@@ -1,4 +1,4 @@
-import { supabaseRead } from './supabase-http';
+import { supabaseReadAll as supabaseRead } from './supabase-http';
 import { bookDatabaseId, notionId, notPublished } from './notion-server';
 
 export type GraphOptions = { cursor?: string; focus?: string };

@@ -9,8 +9,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useTheme } from "../hooks/useDarkMode";
 
 const navigation = [
+    { href: "/books", label: "책 이야기" },
+    { href: "/writing", label: "글 이야기" },
     { href: "/recap", label: "월말결산" },
-    { href: "/forest", label: "문서" },
 ];
 
 export const Header: React.FC = () => {

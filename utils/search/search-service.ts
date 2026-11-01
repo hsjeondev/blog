@@ -1,7 +1,7 @@
 import { getDatabase } from '../blog-data';
 import { bookMetadata, publicationKind } from '../book-metadata';
 import { bookDatabaseId } from '../notion-server';
-import { supabaseRead } from '../supabase-http';
+import { supabaseReadAll as supabaseRead } from '../supabase-http';
 import { normalizeFolderPath } from './folders';
 import type { SearchResult, SearchScope } from './types';
 export { searchableBody } from '../record-map-text';

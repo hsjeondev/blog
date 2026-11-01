@@ -1,6 +1,6 @@
 import { getDatabase } from '../get-database';
 import { bookMetadata, getPublishedPage } from '../published-notion';
-import { bookDatabaseId, isPublishedBook, notionId, notionRequest } from '../notion-server';
+import { bookDatabaseId, isPublishedBook, notionId, notionRequest, configuredDatabaseId } from '../notion-server';
 import { officialRecordMap } from '../official-record-map';
 import { commentReferences } from '../comment-references';
 import { searchableBody } from '../record-map-text';
@@ -17,7 +17,7 @@ function storedBook(page: any, map: any, links: string[]): SyncBook {
   const meta = bookMetadata(page);
   const text = searchableBody(map, meta.id);
   return {
-    post: { id: meta.id, title: meta.title, author: meta.author, category: meta.category, tags: meta.tags, kind: meta.kind,
+    post: { notion_database_id: notionId(page.parent?.database_id), id: meta.id, title: meta.title, author: meta.author, category: meta.category, tags: meta.tags, kind: meta.kind,
       description: meta.description, folder_path: meta.folderPath, icon: meta.icon, cover: meta.cover, written_at: meta.date,
       notion_created_at: meta.createdTime, notion_edited_at: meta.lastEditedTime },
     content: { record_map: map, plain_text: text, reading_minutes: calculateReadingTime(text), source_edited_at: meta.lastEditedTime,
@@ -26,12 +26,12 @@ function storedBook(page: any, map: any, links: string[]): SyncBook {
   };
 }
 
-export async function collectPage(id: string, catalog: ReturnType<typeof bookMetadata>[], signal?: AbortSignal) {
+export async function collectPage(id: string, catalog: ReturnType<typeof bookMetadata>[], signal?: AbortSignal, databaseId?: string) {
   for (let attempt = 0; attempt < 2; attempt++) {
-    const page = await getPublishedPage(id, signal);
+    const page = await getPublishedPage(id, signal, databaseId);
     const map = await officialRecordMap(page, catalog, signal);
     const links = await commentReferences(id, new Set(catalog.map(book => book.id)), signal);
-    const live = await getPublishedPage(id, signal);
+    const live = await getPublishedPage(id, signal, databaseId);
     if (live.last_edited_time === page.last_edited_time) return storedBook(live, map, links);
   }
   throw new Error('Notion page changed repeatedly during sync');
@@ -39,12 +39,12 @@ export async function collectPage(id: string, catalog: ReturnType<typeof bookMet
 
 // No post/body/link writes happen until the complete public catalog and all bodies have
 // been read successfully. Empty *successful* catalogs intentionally revoke all.
-export async function syncPublishedNotion(store: SyncStore, signal?: AbortSignal, progress: Progress = () => {}) {
-  const source = bookDatabaseId();
+export async function syncPublishedNotion(store: SyncStore, signal?: AbortSignal, progress: Progress = () => {}, databaseId = bookDatabaseId()) {
+  const source = configuredDatabaseId(databaseId);
   try {
     signal?.throwIfAborted();
     const started = await store.call('blog_sync_started_at', {}, signal);
-    let raw = (await getDatabase(undefined, undefined, signal)).results;
+    let raw = (await getDatabase(source, undefined, signal)).results;
     const captured = new Map<string, SyncBook>();
     for (let round = 0; round < 3; round++) {
       const catalog = raw.map(bookMetadata);
@@ -57,7 +57,7 @@ export async function syncPublishedNotion(store: SyncStore, signal?: AbortSignal
           || previous.content.record_map.block[id]?.value?.blog_metadata?.lastEditedTime !== allowed.get(id)?.lastEditedTime);
         if (previous && previous.post.notion_edited_at === item.lastEditedTime && !staleReference) continue;
         let book: SyncBook;
-        try { book = await collectPage(item.id, catalog, signal); }
+        try { book = await collectPage(item.id, catalog, signal, source); }
         catch (error) {
           if (error.status !== 404) throw error;
           captured.delete(item.id);
@@ -68,7 +68,7 @@ export async function syncPublishedNotion(store: SyncStore, signal?: AbortSignal
         captured.set(item.id, store.prepareBook ? await store.prepareBook(book, signal) : book);
         progress({ phase: 'body', processed: captured.size, total: catalog.length, id: item.id });
       }
-      raw = (await getDatabase(undefined, undefined, signal)).results;
+      raw = (await getDatabase(source, undefined, signal)).results;
       const live = new Map(raw.map(page => [notionId(page.id), page]));
       const stable = raw.every(page => captured.get(notionId(page.id))?.post.notion_edited_at === page.last_edited_time)
         && [...captured.values()].every(book => !live.has(book.post.id) || book.content.referenced_page_ids.every((id: string) => live.has(id)
@@ -96,9 +96,11 @@ export async function syncNotionPage(store: SyncStore, pageId: string, signal?: 
   // A 404 can mean lost permissions, so propagate it instead of treating it as
   // proof of unpublication. Only a successful page read can revoke this way.
   const page = await notionRequest('pages/' + id, undefined, signal);
-  if (!isPublishedBook(page)) {
-    if (notionId(page.parent?.database_id) !== bookDatabaseId()) throw new Error('Page is outside the configured database');
-    return store.call('blog_soft_delete_notion_post', { p_database: bookDatabaseId(), p_page: id }, signal);
+  let source: string;
+  try { source = configuredDatabaseId(page.parent?.database_id); }
+  catch { throw new Error('Page is outside the configured database'); }
+  if (!isPublishedBook(page, source)) {
+    return store.call('blog_soft_delete_notion_post', { p_database: source, p_page: id }, signal);
   }
-  return syncPublishedNotion(store, signal, progress);
+  return syncPublishedNotion(store, signal, progress, source);
 }

@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { bookDatabaseId, notionId, noPublicationCache } from '../../../utils/notion-server';
+import { blogDatabaseIds, notionId, noPublicationCache } from '../../../utils/notion-server';
 import { createSyncStore } from '../../../utils/sync/supabase-store';
-import { drainNotionEvents, normalizedNotionEvent, validNotionSignature } from '../../../utils/sync/notion-webhook';
+import { drainNotionEvents, normalizedNotionEvent, validNotionSignature, sourceEventId } from '../../../utils/sync/notion-webhook';
 
 const MAX_BODY = 256 * 1024;
 function configurationDetails() {
@@ -19,6 +19,7 @@ function configurationDetails() {
   if (!serverKey) missing.push('SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY');
   if (!process.env.NOTION_MYBOOKLIST_ID?.trim()) missing.push('NOTION_MYBOOKLIST_ID');
   else if (!notionId(process.env.NOTION_MYBOOKLIST_ID.trim())) invalid.push('NOTION_MYBOOKLIST_ID');
+  if (process.env.NOTION_BLOG_DATABASE_ID?.trim() && !notionId(process.env.NOTION_BLOG_DATABASE_ID.trim())) invalid.push('NOTION_BLOG_DATABASE_ID');
   return { missing, invalid, serverKeyVariable: serverKey };
 }
 function readRaw(req: NextApiRequest) {
@@ -44,7 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const token = process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN?.trim() || '';
   const details = configurationDetails();
   let databaseReady = false;
-  try { createSyncStore(); bookDatabaseId(); databaseReady = details.missing.length === 0 && details.invalid.length === 0; } catch {}
+  try { createSyncStore(); blogDatabaseIds(); databaseReady = details.missing.length === 0 && details.invalid.length === 0; } catch {}
   if (req.method === 'GET') {
     let databaseConnection: { connected: boolean; httpStatus?: number; code?: string } | undefined;
     if (databaseReady && req.query?.check === 'database') {
@@ -78,9 +79,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (process.env.NOTION_WEBHOOK_SUBSCRIPTION_ID && payload?.subscription_id !== process.env.NOTION_WEBHOOK_SUBSCRIPTION_ID.trim()) return res.status(401).json({ error: 'Invalid subscription' });
     const event = normalizedNotionEvent(payload);
     if (!event) return res.status(200).json({ ignored: true });
-    await store.call('blog_enqueue_notion_event', { p_database: bookDatabaseId(), p_event: event.id, p_type: event.type,
+    const sources = blogDatabaseIds();
+    for (const source of sources) await store.call('blog_enqueue_notion_event', { p_database: source, p_event: sourceEventId(event.id, source), p_type: event.type,
       p_page: event.page, p_time: event.time });
-    const complete = await drainNotionEvents(store, AbortSignal.timeout(45_000));
+    const signal = AbortSignal.timeout(45_000);
+    let complete = true;
+    for (const source of sources) complete = await drainNotionEvents(store, signal, source) && complete;
     if (!complete) res.setHeader('Retry-After', '30');
     return res.status(complete ? 200 : 503).json({ received: true, complete });
   } catch (error) {

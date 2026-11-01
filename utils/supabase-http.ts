@@ -1,3 +1,4 @@
+import { blogDatabaseIds } from './notion-server';
 export function supabaseUrl() {
   const url = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || '');
   if (url.protocol !== 'https:' && url.hostname !== '127.0.0.1') throw new Error('Invalid Supabase URL');
@@ -36,4 +37,17 @@ export async function storageServiceKey(management = false): Promise<string> {
   const found = Array.isArray(keys) && keys.find(item => item.name === 'service_role' && typeof item.api_key === 'string');
   if (!response.ok || !found) throw new Error('Storage administrative key is unavailable');
   return found.api_key;
+}
+
+// Each RPC retains its existing per-database publication/RLS checks.
+export async function supabaseReadAll(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<any> {
+  const sources = blogDatabaseIds();
+  const results = await Promise.all(sources.map(p_database => supabaseRead(name, { ...args, p_database }, signal)));
+  if (['blog_read_post', 'blog_read_page', 'blog_read_asset'].includes(name)) return results.find(value => value != null) ?? null;
+  if (name === 'blog_read_graph') {
+    if (results.some(value => !Array.isArray(value?.posts) || !Array.isArray(value?.links))) throw new Error('Invalid stored graph');
+    return { posts: results.flatMap(value => value.posts), links: results.flatMap(value => value.links) };
+  }
+  if (results.some(value => !Array.isArray(value))) throw new Error('Invalid database result');
+  return results.flat();
 }

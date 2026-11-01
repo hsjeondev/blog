@@ -14,7 +14,7 @@ export function bookMetadata(page: any) {
   const titleProperty = props['책제목'] || Object.values(props).find((p: any) => p.type === 'title');
   return {
     id: notionId(page.id), title: propertyText(titleProperty) || '제목 없는 기록', author: propertyText(props['저자']),
-    category: props['분류']?.select?.name || props['카테고리']?.select?.name || '독서',
+    category: props['분류']?.select?.name || props['카테고리']?.select?.name || (props['카테고리'] ? '미분류' : '독서'),
     tags: (props['태그']?.multi_select || []).map((tag: any) => ({ id: tag.id || tag.name, name: tag.name })),
     date: props['작성일']?.date?.start || props['발행일']?.date?.start || props['forest_날짜']?.date?.start || page.created_time,
     createdTime: page.created_time, lastEditedTime: page.last_edited_time, cover: page.cover || null, icon: page.icon || null,

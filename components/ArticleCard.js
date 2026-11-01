@@ -129,7 +129,7 @@ export const ArticleCard = ({ post, onClick, coverPriority = false }) => {
                 >
                     <span
                         style={{
-                            color: post.category.includes('스터디')
+                            color: post.source === 'books' ? '#E25334' : post.category.includes('스터디')
                                 ? 'var(--category-text-1)'
                                 : post.category.includes('프로젝트')
                                     ? 'var(--category-text-2)'

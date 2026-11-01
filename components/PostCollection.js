@@ -19,7 +19,7 @@ export default function PostCollection({ title, path, list, loadError }) {
       {tabs.map(tab => <Link key={tab.category} href={{ pathname: path, query: tab.category ? { category: tab.category } : {} }} shallow scroll={false}
         aria-current={category === tab.category ? 'page' : undefined}
         className="shrink-0 whitespace-nowrap no-underline font-bold py-3 border-b-2"
-        style={{ color: category === tab.category ? 'var(--foreground)' : 'var(--text-tertiary, #888)', borderColor: category === tab.category ? 'var(--foreground)' : 'transparent' }}>
+        style={{ color: path === '/books' ? '#E25334' : category === tab.category ? 'var(--foreground)' : 'var(--text-tertiary, #888)', borderColor: category === tab.category ? path === '/books' ? '#E25334' : 'var(--foreground)' : 'transparent' }}>
         {tab.name} <span className="text-sm font-normal">({tab.count})</span>
       </Link>)}
     </nav>

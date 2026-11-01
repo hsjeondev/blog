@@ -7,7 +7,7 @@ const itemVariants = {
     visible: { opacity: 1, y: 0 }
 };
 
-export const PostHeader = ({ title, author, category, tags, date, readTime, summary }) => {
+export const PostHeader = ({ title, author, category, tags, date, readTime, summary, source }) => {
     const bookAuthor = author?.trim();
     return (
         <div className='pt-6 pb-0 sticky z-10'>
@@ -18,8 +18,8 @@ export const PostHeader = ({ title, author, category, tags, date, readTime, summ
                 {category &&
                     <span
                         style={{
-                            background: category.includes('스터디') ? 'var(--category-bg-1)' : category.includes('프로젝트') ? 'var(--category-bg-2)' : 'var(--category-bg-3)',
-                            color: category.includes('스터디') ? 'var(--category-text-1)' : category.includes('프로젝트') ? 'var(--category-text-2)' : 'var(--category-text-3)',
+                            background: source === 'books' ? 'color-mix(in srgb, #E25334 12%, var(--background))' : category.includes('스터디') ? 'var(--category-bg-1)' : category.includes('프로젝트') ? 'var(--category-bg-2)' : 'var(--category-bg-3)',
+                            color: source === 'books' ? '#E25334' : category.includes('스터디') ? 'var(--category-text-1)' : category.includes('프로젝트') ? 'var(--category-text-2)' : 'var(--category-text-3)',
                         }}
                         className="px-2 py-1 text-sm rounded-full"
                     >

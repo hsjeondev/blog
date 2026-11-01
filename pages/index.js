@@ -50,7 +50,7 @@ export default function Home({ books, writing, loadError }) {
 
       <motion.h1 layoutId="page-hero" className="text-2xl text-gray-400 font-black mb-4 md:text-3xl text-balance" style={{ wordBreak: 'keep-all', overflowWrap: 'break-word' }}>
         안녕하세요, <span style={{ color: '#E25334' }}>프리머그</span>입니다.<br />
-        <span style={{ color: '#E25334' }}>책</span>으로 쌓은 <span style={{ color: '#E25334' }}>지식</span>을 기록하고 연결합니다.
+        나를 돌아보고 세상을 바라보며, <span style={{ color: '#E25334' }}>삶의 이야기</span>를 기록하고 <span style={{ color: '#E25334' }}>연결</span>합니다.
       </motion.h1>
       <motion.button
         whileHover={{ scale: 1.02 }}

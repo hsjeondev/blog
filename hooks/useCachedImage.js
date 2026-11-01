@@ -11,9 +11,9 @@ async function rememberCover(cache, key, blob) {
   await Promise.all(keys.slice(0, Math.max(0, keys.length - MAX_COVERS)).map(entry => cache.delete(entry)));
 }
 
-// The uncached public catalog supplies the revision. Never use a saved catalog
-// to decide which covers are eligible for reuse, or store private post content.
-export default function useBookCover(url, revision, priority) {
+// Fresh public catalog/page metadata supplies the revision. Cards and body
+// images share the same cache keys, including covers saved before this change.
+export default function useCachedImage(url, revision, priority) {
   const imageRef = useRef(null);
   const [image, setImage] = useState(null);
   const identity = `${url || ''}:${revision || ''}`;
@@ -39,7 +39,7 @@ export default function useBookCover(url, revision, priority) {
         } catch { /* Storage may be unavailable or full; image loading still works. */ }
       }
       if (!active) return;
-      // Only cache misses below the initial six wait until near the viewport.
+      // Cache hits are immediate; defer non-priority misses until near the viewport.
       if (!priority && imageRef.current && 'IntersectionObserver' in window) {
         await new Promise(resolve => {
           observer = new IntersectionObserver(entries => {

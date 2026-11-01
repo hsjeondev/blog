@@ -1,14 +1,14 @@
 import { motion } from 'framer-motion';
 import { useState, useContext, useCallback } from 'react';
 import { currentPostContext } from '../pages/_app';
-import useBookCover from '../hooks/useBookCover';
+import useCachedImage from '../hooks/useCachedImage';
 
 export const ArticleCard = ({ post, onClick, coverPriority = false }) => {
     const [isAnimating, setIsAnimating] = useState(false);
     const [failedCover, setFailedCover] = useState(null);
     const [loadedCover, setLoadedCover] = useState(null);
     const bookCover = post.source === 'books' ? post.cardCover : null;
-    const { imageRef, src: coverSrc, cached: cachedCover } = useBookCover(bookCover, post.lastEditedTime, coverPriority);
+    const { imageRef, src: coverSrc, cached: cachedCover } = useCachedImage(bookCover, post.lastEditedTime, coverPriority);
     const showBookCover = !!bookCover && failedCover !== bookCover;
     const markCoverReady = useCallback(image => {
         imageRef.current = image;

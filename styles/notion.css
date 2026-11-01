@@ -896,6 +896,8 @@ svg.notion-page-icon {
 .notion-progressive-image > .notion-image-thumbnail { filter: blur(12px); transform: scale(1.04); pointer-events: none; }
 .notion-progressive-image[data-phase='preview'] > .notion-image-thumbnail { opacity: 1; }
 .notion-progressive-image[data-phase='ready'] > .notion-image-original { opacity: 1; }
+.notion-progressive-image[data-cached] > img,
+.notion-progressive-image[data-cached] > .notion-image-skeleton { transition: none !important; }
 .notion-progressive-image:is([data-phase='preview'], [data-phase='ready']) > .notion-image-skeleton { opacity: 0; }
 .notion-progressive-image:is([data-phase='preview'], [data-phase='ready'], [data-phase='error']) > .notion-image-skeleton::after { animation: none; }
 .notion-image-error { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; color: var(--foreground-transparent); font-size: .8rem; }

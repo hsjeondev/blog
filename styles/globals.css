@@ -103,6 +103,36 @@ body {
   font-family: "NanumSquareNeo", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }
 
+.site-footer {
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  padding-bottom: 2rem;
+  border-top: 1px solid var(--secondary);
+  color: var(--date-text);
+  font-size: 0.75rem;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+
+.site-footer p {
+  margin: 0;
+}
+
+.site-footer p + p {
+  margin-top: 0.5rem;
+}
+
+.site-footer a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.site-footer a:hover,
+.site-footer a:focus-visible {
+  color: var(--foreground);
+}
+
 main {
   max-width: var(--max-width);
   margin: 0 auto;

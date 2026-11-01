@@ -7,6 +7,7 @@ import '../styles/forest.css'
 import '../styles/search.css'
 import '../styles/graph.css'
 import { Header } from "../components/Header";
+import { Footer } from "../components/Footer";
 import { useRouter } from 'next/router';
 import { Spinner } from "../components/Spinner";
 import { motion } from 'framer-motion';
@@ -94,6 +95,7 @@ export default function App({ Component, pageProps }) {
           />
         )}
         {router.pathname !== '/graph' && <Header />}
+        {!loading && router.pathname !== '/graph' && !router.pathname.startsWith('/embed/') && <Footer />}
       </currentPostContext.Provider>
       </SearchProvider>
     </ThemeProvider>

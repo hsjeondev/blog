@@ -398,6 +398,8 @@ salt는 `openssl rand -hex 32`로 생성한 값을 `SEARCH_AGENT_IP_SALT`에 등
 
 ## 여러 Notion 데이터베이스 연결
 
+책 이야기 카드의 표지는 `blog_posts.card_cover`에 저장된 본문 첫 이미지입니다. `book_card_covers` 마이그레이션은 기존 본문에서 표지를 연결하고, 이후 본문 동기화 때 트리거로 갱신합니다. 해당 글의 `/api/blog-media/…` 경로만 허용하며, 목록 조회에서 본문이나 Notion을 추가로 읽지 않습니다. Notion 페이지 커버와 상세 화면은 변경하지 않습니다. 표지가 없거나 로드에 실패하면 기존 아이콘으로 돌아갑니다.
+
 기존 `NOTION_MYBOOKLIST_ID`는 독서 글 원본으로 유지합니다. 추가 글 원본은 서버 환경변수 `NOTION_BLOG_DATABASE_ID`로 연결합니다.
 새 블로그 DB: `aac45ada-0609-41d4-a0a5-f6e1a094062e` (데이터 소스: `5e6c8e08-274c-423b-8ccc-cfa2c7ab002f`).
 

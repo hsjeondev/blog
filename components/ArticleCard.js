@@ -4,6 +4,9 @@ import { currentPostContext } from '../pages/_app';
 
 export const ArticleCard = ({ post, onClick }) => {
     const [isAnimating, setIsAnimating] = useState(false);
+    const [failedCover, setFailedCover] = useState(null);
+    const bookCover = post.source === 'books' ? post.cardCover : null;
+    const showBookCover = !!bookCover && failedCover !== bookCover;
     const { setTitle, setPostId } = useContext(currentPostContext);
 
     const handleClick = async (e) => {
@@ -65,7 +68,7 @@ export const ArticleCard = ({ post, onClick }) => {
                 background: 'var(--card-bg)',
                 position: 'relative',
             }}
-            className="rounded-3xl overflow-hidden hover:shadow-lg transition-all ease-in cursor-pointer aspect-none flex flex-col p-6 md:aspect-square"
+            className={`article-card rounded-3xl overflow-hidden hover:shadow-lg transition-all ease-in cursor-pointer aspect-none flex flex-col p-6 md:aspect-square${showBookCover ? ' article-card-with-book-cover' : ''}`}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
             exit={{
@@ -92,7 +95,17 @@ export const ArticleCard = ({ post, onClick }) => {
                 className="hover:display-none"
             />
 
-            <motion.div className="relative z-10 flex flex-col h-full">
+            {showBookCover && <img
+                className="article-card-book-cover"
+                src={bookCover}
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                decoding="async"
+                onError={() => setFailedCover(bookCover)}
+            />}
+
+            <motion.div className="article-card-content relative z-10 flex flex-col h-full">
                 <motion.div
                     layoutId={`category-${post.id}`}
                     className="flex items-center gap-2 mb-4 font-bold"
@@ -145,7 +158,7 @@ export const ArticleCard = ({ post, onClick }) => {
                     {new Date(post.date).toLocaleDateString()}
                 </motion.span>
 
-                {post.icon && (
+                {!showBookCover && post.icon && (
                     <motion.div layoutId={`icon-${post.id}`} className="absolute bottom-0 right-0 w-1/5">
                         {post.icon.type === 'emoji'
                           ? <span role="img" aria-label="책 아이콘" className="text-5xl">{post.icon.emoji}</span>

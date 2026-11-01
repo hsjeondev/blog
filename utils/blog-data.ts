@@ -5,7 +5,7 @@ export { bookMetadata, propertyText, publicationKind, siteUrl } from './book-met
 export function rowMetadata(row: any) {
   return { id: row.id, source: row.notion_database_id === bookDatabaseId() ? 'books' : 'writing', title: row.title, author: row.author, category: row.category, tags: row.tags || [], date: new Date(row.written_at).toISOString(),
     createdTime: new Date(row.notion_created_at).toISOString(), lastEditedTime: new Date(row.notion_edited_at).toISOString(),
-    icon: row.icon || null, cover: row.cover || null, description: row.description || '', folderPath: row.folder_path || '', kind: row.kind };
+    icon: row.icon || null, cover: row.cover || null, cardCover: row.card_cover || null, description: row.description || '', folderPath: row.folder_path || '', kind: row.kind };
 }
 export async function sectionPosts(section: 'books' | 'writing', signal?: AbortSignal) {
   return (await publishedBooks(signal)).filter(post => post.kind === 'post' && post.source === section);

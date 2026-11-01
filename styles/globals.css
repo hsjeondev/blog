@@ -133,6 +133,45 @@ body {
   color: var(--foreground);
 }
 
+.article-card-with-book-cover {
+  min-height: 20rem;
+  isolation: isolate;
+}
+
+.article-card-with-book-cover .article-card-content {
+  flex: 1;
+  min-height: 17rem;
+}
+
+.article-card-book-cover {
+  position: absolute;
+  right: -5%;
+  bottom: -8%;
+  width: 46%;
+  height: 64%;
+  object-fit: cover;
+  object-position: top left;
+  pointer-events: none;
+  user-select: none;
+  transform: rotate(-8deg);
+  filter: var(--book-cover-filter, none);
+  box-shadow: -10px 8px 28px rgb(0 0 0 / 16%);
+}
+
+html.dark {
+  --book-cover-filter: grayscale(1);
+}
+
+html.light {
+  --book-cover-filter: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.light) {
+    --book-cover-filter: grayscale(1);
+  }
+}
+
 main {
   max-width: var(--max-width);
   margin: 0 auto;

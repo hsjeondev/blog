@@ -156,6 +156,18 @@ body {
   transform: rotate(-8deg);
   filter: var(--book-cover-filter, none);
   box-shadow: -10px 8px 28px rgb(0 0 0 / 16%);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.article-card-book-cover.is-loaded {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .article-card-book-cover {
+    transition: none;
+  }
 }
 
 html.dark {

@@ -1,12 +1,20 @@
 import { motion } from 'framer-motion';
-import { useState, useContext } from 'react';
+import { useState, useContext, useCallback } from 'react';
 import { currentPostContext } from '../pages/_app';
 
-export const ArticleCard = ({ post, onClick }) => {
+export const ArticleCard = ({ post, onClick, coverPriority = false }) => {
     const [isAnimating, setIsAnimating] = useState(false);
     const [failedCover, setFailedCover] = useState(null);
+    const [loadedCover, setLoadedCover] = useState(null);
     const bookCover = post.source === 'books' ? post.cardCover : null;
     const showBookCover = !!bookCover && failedCover !== bookCover;
+    const markCoverReady = useCallback(image => {
+        if (!image?.complete || !image.naturalWidth) return;
+        const reveal = () => { if (image.isConnected) setLoadedCover(bookCover); };
+        // Also handles images loaded from memory before hydration attaches onLoad.
+        if (typeof image.decode === 'function') image.decode().then(reveal, reveal);
+        else reveal();
+    }, [bookCover]);
     const { setTitle, setPostId } = useContext(currentPostContext);
 
     const handleClick = async (e) => {
@@ -96,12 +104,15 @@ export const ArticleCard = ({ post, onClick }) => {
             />
 
             {showBookCover && <img
-                className="article-card-book-cover"
+                ref={markCoverReady}
+                className={`article-card-book-cover${loadedCover === bookCover ? ' is-loaded' : ''}`}
                 src={bookCover}
                 alt=""
                 aria-hidden="true"
-                loading="lazy"
+                loading={coverPriority ? 'eager' : 'lazy'}
+                fetchPriority={coverPriority ? 'high' : 'auto'}
                 decoding="async"
+                onLoad={event => markCoverReady(event.currentTarget)}
                 onError={() => setFailedCover(bookCover)}
             />}
 

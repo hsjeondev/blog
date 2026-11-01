@@ -164,6 +164,10 @@ body {
   opacity: 1;
 }
 
+.article-card-book-cover.is-cached {
+  transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .article-card-book-cover {
     transition: none;

@@ -1,20 +1,26 @@
 import { motion } from 'framer-motion';
 import { useState, useContext, useCallback } from 'react';
 import { currentPostContext } from '../pages/_app';
+import useBookCover from '../hooks/useBookCover';
 
 export const ArticleCard = ({ post, onClick, coverPriority = false }) => {
     const [isAnimating, setIsAnimating] = useState(false);
     const [failedCover, setFailedCover] = useState(null);
     const [loadedCover, setLoadedCover] = useState(null);
     const bookCover = post.source === 'books' ? post.cardCover : null;
+    const { imageRef, src: coverSrc, cached: cachedCover } = useBookCover(bookCover, post.lastEditedTime, coverPriority);
     const showBookCover = !!bookCover && failedCover !== bookCover;
     const markCoverReady = useCallback(image => {
+        imageRef.current = image;
         if (!image?.complete || !image.naturalWidth) return;
-        const reveal = () => { if (image.isConnected) setLoadedCover(bookCover); };
+        const source = image.getAttribute('src');
+        const reveal = () => {
+            if (image.isConnected && image.getAttribute('src') === source) setLoadedCover(source);
+        };
         // Also handles images loaded from memory before hydration attaches onLoad.
         if (typeof image.decode === 'function') image.decode().then(reveal, reveal);
         else reveal();
-    }, [bookCover]);
+    }, [imageRef]);
     const { setTitle, setPostId } = useContext(currentPostContext);
 
     const handleClick = async (e) => {
@@ -105,11 +111,11 @@ export const ArticleCard = ({ post, onClick, coverPriority = false }) => {
 
             {showBookCover && <img
                 ref={markCoverReady}
-                className={`article-card-book-cover${loadedCover === bookCover ? ' is-loaded' : ''}`}
-                src={bookCover}
+                className={`article-card-book-cover${coverSrc && loadedCover === coverSrc ? ' is-loaded' : ''}${cachedCover ? ' is-cached' : ''}`}
+                src={coverSrc}
                 alt=""
                 aria-hidden="true"
-                loading={coverPriority ? 'eager' : 'lazy'}
+                loading="eager"
                 fetchPriority={coverPriority ? 'high' : 'auto'}
                 decoding="async"
                 onLoad={event => markCoverReady(event.currentTarget)}

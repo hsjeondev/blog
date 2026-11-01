@@ -57,6 +57,49 @@ test('normalized results retain page routes and metadata', () => {
 });
 
 async function withBlog(rows,run){const original=global.fetch,db=blogFixture(rows);global.fetch=db.fetch;try{await run(db);}finally{global.fetch=original;}}
+test('book and writing scopes separate source databases in metadata, body search and the API', async () => {
+  const previous = process.env.NOTION_BLOG_DATABASE_ID;
+  const secondary = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  process.env.NOTION_BLOG_DATABASE_ID = secondary;
+  const book = rowFromPage(page({ ...doc, title: '공통 책' }, '포스트'));
+  const writing = { ...book, id: '22222222-2222-4222-8222-222222222222', notion_database_id: secondary, title: '공통 글' };
+  const recap = { ...book, id: '33333333-3333-4333-8333-333333333333', kind: 'recap' };
+  const hidden = { ...writing, id: '44444444-4444-4444-8444-444444444444', is_published: false };
+  try {
+    await withBlog([book, writing, recap, hidden], async db => {
+      assert.equal((await searchContent('공통')).results.length, 3);
+      assert.deepEqual((await searchContent('공통', 'books')).results.map(item => item.id), [book.id]);
+      assert.deepEqual((await searchContent('공통', 'writing')).results.map(item => item.id), [writing.id]);
+      for (const row of [book, writing, recap, hidden]) db.texts.set(row.id, '숨은 문장');
+      for (const [scope, row] of [['books', book], ['writing', writing]]) {
+        const body = await searchContent('숨은', scope, '', 30, { mode: 'body' });
+        assert.deepEqual(body.results.map(item => item.id), [row.id]);
+        assert.match(body.results[0].excerpt, /숨은/);
+        const res = response();
+        await searchHandler({ method: 'GET', query: { q: '공통', type: scope } }, res);
+        assert.equal(res.statusCode, 200);
+        assert.deepEqual(res.body.results.map(item => item.source), [scope]);
+      }
+    });
+  } finally {
+    if (previous === undefined) delete process.env.NOTION_BLOG_DATABASE_ID;
+    else process.env.NOTION_BLOG_DATABASE_ID = previous;
+  }
+});
+
+test('visible search tabs and cached source filtering match the book and writing sections', () => {
+  const { SEARCH_TABS } = require('../utils/search/types.ts');
+  const { SearchResultCache } = require('../utils/search/result-cache.ts');
+  assert.deepEqual(SEARCH_TABS, ['all', 'books', 'writing']);
+  const book = { ...doc, id: 'book', type: 'post', source: 'books' };
+  const writing = { ...doc, id: 'writing', type: 'post', source: 'writing' };
+  const recap = { ...book, id: 'recap', type: 'recap' };
+  const cache = new SearchResultCache();
+  cache.set('공통', 'all', '', { results: [book, writing, recap], partial: false }, 1000);
+  assert.deepEqual(cache.get('공통', 'books', '', 1001).results, [book]);
+  assert.deepEqual(cache.get('공통', 'writing', '', 1001).results, [writing]);
+});
+
 test('body search queries stored text and retains metadata on a body-query failure',()=>withBlog([rowFromPage(page(doc,'문서'))],async db=>{
   db.texts.set(doc.id,'본문 내용');
   const result=await searchContent('본문','document','개발',30,{mode:'body'});

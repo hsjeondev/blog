@@ -20,15 +20,32 @@ export default async function handler(req: NextApiRequest,res: NextApiResponse) 
     if(!new RegExp('^'+page+'/[a-f0-9]{64}$').test(asset.object_path))throw new Error('Invalid asset path');
     const range=req.headers.range;
     if(range&&!/^bytes=\d*-\d*$/.test(range))return res.status(416).end();
+    // Revalidate visibility above before allowing the browser to reuse image bytes.
+    const etag=!range&&/^image\//.test(asset.content_type)&&/^[a-f0-9]{64}$/.test(asset.content_hash)
+      ?'"sha256-'+asset.content_hash+'"':null;
+    const cacheImage=()=>{
+      if(!etag)return;
+      res.setHeader('Cache-Control','private, no-cache, max-age=0, must-revalidate');
+      res.setHeader('ETag',etag);
+    };
+    const ifNoneMatch=req.headers['if-none-match'];
+    if(etag&&typeof ifNoneMatch==='string'&&ifNoneMatch.split(',').some(value=>{
+      const tag=value.trim();
+      return tag==='*'||tag.replace(/^W\//,'')===etag;
+    })){
+      cacheImage();
+      return res.status(304).end();
+    }
     res.setHeader('Content-Type',asset.content_type);
     res.setHeader('Content-Disposition',/^(image|audio|video)\//.test(asset.content_type)||asset.content_type==='application/pdf'?'inline':'attachment');
-    if(req.method==='HEAD'){res.setHeader('Content-Length',asset.byte_size);return res.status(200).end();}
+    if(req.method==='HEAD'){cacheImage();res.setHeader('Content-Length',asset.byte_size);return res.status(200).end();}
     const secret=await storageServiceKey();
     const upstream=await fetch(new URL('/storage/v1/object/authenticated/blog-assets/'+asset.object_path,supabaseUrl()),{
       headers:{...supabaseHeaders(secret),...(range?{Range:range}:{})},cache:'no-store',
       signal:AbortSignal.any([controller.signal,AbortSignal.timeout(30000)]),
     });
     if(!upstream.ok||!upstream.body)return res.status(upstream.status===404?404:502).end();
+    cacheImage();
     for(const header of ['content-length','content-range','accept-ranges']){const value=upstream.headers.get(header);if(value)res.setHeader(header,value);}
     res.status(upstream.status);
     await pipeline(Readable.fromWeb(upstream.body as any),res);

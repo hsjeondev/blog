@@ -58,6 +58,7 @@ export default function App({ Component, pageProps }) {
     <ThemeProvider>
       <SearchProvider>
       <currentPostContext.Provider value={{ title, postId, setTitle, setPostId }}>
+        <div className="site-content">
         {loading ? title ? (
           <motion.div
             style={{
@@ -94,6 +95,7 @@ export default function App({ Component, pageProps }) {
             key={router.pathname === '/forest' ? router.pathname : router.asPath}
           />
         )}
+        </div>
         {router.pathname !== '/graph' && <Header />}
         {!loading && router.pathname !== '/graph' && !router.pathname.startsWith('/embed/') && <Footer />}
       </currentPostContext.Provider>

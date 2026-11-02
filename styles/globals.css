@@ -103,7 +103,20 @@ body {
   font-family: "NanumSquareNeo", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }
 
+#__next {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.site-content {
+  flex: 1 0 auto;
+  min-width: 0;
+}
+
 .site-footer {
+  flex-shrink: 0;
   margin-top: 4rem;
   padding-top: 1.5rem;
   padding-bottom: max(2rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));

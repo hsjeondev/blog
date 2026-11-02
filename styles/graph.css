@@ -82,7 +82,41 @@
 }
 
 .knowledge-graph-compact {
-  height: 250px;
+  height: 360px;
+  cursor: grab;
+}
+
+.knowledge-graph-compact:active {
+  cursor: grabbing;
+}
+
+.knowledge-graph-reset {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  border-radius: 12px;
+  color: var(--foreground);
+  background: var(--card-bg);
+  cursor: pointer;
+}
+
+.knowledge-graph-reset:hover {
+  background: var(--secondary);
+}
+
+.knowledge-graph-reset:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.knowledge-graph .knowledge-graph-reset svg {
+  width: 20px;
+  height: 20px;
 }
 
 .knowledge-graph-full {
@@ -243,7 +277,7 @@
 }
 
 .knowledge-graph-compact .knowledge-graph-node text {
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .graph-page {
@@ -427,7 +461,7 @@
   }
 
   .knowledge-graph-compact {
-    height: 220px;
+    height: 300px;
   }
 
   .graph-page {

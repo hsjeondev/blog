@@ -20,6 +20,22 @@ export function bookDatabaseId() {
   return id;
 }
 
+// Optional additional source; keep My Book list as the legacy default.
+export function blogDatabaseIds(): string[] {
+  const primary = bookDatabaseId();
+  const extra = process.env.NOTION_BLOG_DATABASE_ID?.trim();
+  if (!extra) return [primary];
+  const id = notionId(extra);
+  if (!id) throw Object.assign(new Error('NOTION_BLOG_DATABASE_ID is not configured correctly'), { status: 503 });
+  return [...new Set([primary, id])];
+}
+
+export function configuredDatabaseId(value: unknown): string {
+  const id = notionId(value);
+  if (!id || !blogDatabaseIds().includes(id)) throw notPublished();
+  return id;
+}
+
 export function notPublished() {
   return Object.assign(new Error('Page not found'), { status: 404, code: 'object_not_found' });
 }
@@ -35,9 +51,9 @@ export async function notionRequest(path: string, body?: any, signal?: AbortSign
   });
 }
 
-export function isPublishedBook(page: any) {
+export function isPublishedBook(page: any, databaseId?: string) {
   return page?.object === 'page' && !page.archived && !page.in_trash
-    && notionId(page.parent?.database_id) === bookDatabaseId()
+    && (databaseId ? notionId(page.parent?.database_id) === configuredDatabaseId(databaseId) : blogDatabaseIds().includes(notionId(page.parent?.database_id)))
     && page.properties?.['공개']?.type === 'checkbox' && page.properties['공개'].checkbox === true;
 }
 

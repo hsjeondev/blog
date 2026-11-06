@@ -1,9 +1,26 @@
 import { motion } from 'framer-motion';
-import { useState, useContext } from 'react';
+import { useState, useContext, useCallback } from 'react';
 import { currentPostContext } from '../pages/_app';
+import useCachedImage from '../hooks/useCachedImage';
 
-export const ArticleCard = ({ post, onClick }) => {
+export const ArticleCard = ({ post, onClick, coverPriority = false }) => {
     const [isAnimating, setIsAnimating] = useState(false);
+    const [failedCover, setFailedCover] = useState(null);
+    const [loadedCover, setLoadedCover] = useState(null);
+    const bookCover = post.source === 'books' ? post.cardCover : null;
+    const { imageRef, src: coverSrc, cached: cachedCover } = useCachedImage(bookCover, post.lastEditedTime, coverPriority);
+    const showBookCover = !!bookCover && failedCover !== bookCover;
+    const markCoverReady = useCallback(image => {
+        imageRef.current = image;
+        if (!image?.complete || !image.naturalWidth) return;
+        const source = image.getAttribute('src');
+        const reveal = () => {
+            if (image.isConnected && image.getAttribute('src') === source) setLoadedCover(source);
+        };
+        // Also handles images loaded from memory before hydration attaches onLoad.
+        if (typeof image.decode === 'function') image.decode().then(reveal, reveal);
+        else reveal();
+    }, [imageRef]);
     const { setTitle, setPostId } = useContext(currentPostContext);
 
     const handleClick = async (e) => {
@@ -65,7 +82,7 @@ export const ArticleCard = ({ post, onClick }) => {
                 background: 'var(--card-bg)',
                 position: 'relative',
             }}
-            className="rounded-3xl overflow-hidden hover:shadow-lg transition-all ease-in cursor-pointer aspect-none flex flex-col p-6 md:aspect-square"
+            className={`article-card rounded-3xl overflow-hidden hover:shadow-lg transition-all ease-in cursor-pointer aspect-none flex flex-col p-6 md:aspect-square${showBookCover ? ' article-card-with-book-cover' : ''}`}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
             exit={{
@@ -92,14 +109,27 @@ export const ArticleCard = ({ post, onClick }) => {
                 className="hover:display-none"
             />
 
-            <motion.div className="relative z-10 flex flex-col h-full">
+            {showBookCover && <img
+                ref={markCoverReady}
+                className={`article-card-book-cover${coverSrc && loadedCover === coverSrc ? ' is-loaded' : ''}${cachedCover ? ' is-cached' : ''}`}
+                src={coverSrc}
+                alt=""
+                aria-hidden="true"
+                loading="eager"
+                fetchPriority={coverPriority ? 'high' : 'auto'}
+                decoding="async"
+                onLoad={event => markCoverReady(event.currentTarget)}
+                onError={() => setFailedCover(bookCover)}
+            />}
+
+            <motion.div className="article-card-content relative z-10 flex flex-col h-full min-w-0">
                 <motion.div
                     layoutId={`category-${post.id}`}
-                    className="flex items-center gap-2 mb-4 font-bold"
+                    className="flex items-center gap-2 mb-4 font-bold min-w-0 break-words"
                 >
                     <span
                         style={{
-                            color: post.category.includes('스터디')
+                            color: post.source === 'books' ? '#E25334' : post.category.includes('스터디')
                                 ? 'var(--category-text-1)'
                                 : post.category.includes('프로젝트')
                                     ? 'var(--category-text-2)'
@@ -145,7 +175,7 @@ export const ArticleCard = ({ post, onClick }) => {
                     {new Date(post.date).toLocaleDateString()}
                 </motion.span>
 
-                {post.icon && (
+                {!showBookCover && post.icon && (
                     <motion.div layoutId={`icon-${post.id}`} className="absolute bottom-0 right-0 w-1/5">
                         {post.icon.type === 'emoji'
                           ? <span role="img" aria-label="책 아이콘" className="text-5xl">{post.icon.emoji}</span>

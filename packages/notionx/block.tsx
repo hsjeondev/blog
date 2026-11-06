@@ -848,9 +848,11 @@ export function Block(props: BlockProps) {
 
     case 'table':
       return (
-        <table className={cs('notion-simple-table', blockId)}>
-          <tbody>{children}</tbody>
-        </table>
+        <div className='notion-simple-table-wrapper' role='region' aria-label='표' tabIndex={0}>
+          <table className={cs('notion-simple-table', blockId)}>
+            <tbody>{children}</tbody>
+          </table>
+        </div>
       )
 
     case 'table_row': {

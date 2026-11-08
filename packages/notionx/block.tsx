@@ -428,23 +428,23 @@ export function Block(props: BlockProps) {
       return <hr className={cs('notion-hr', blockId)} />
 
     case 'text': {
-      if (!block.properties && !block.content?.length) {
-        return <div className={cs('notion-blank', blockId)}>&nbsp;</div>
-      }
-
+      const title = block.properties?.title
+      // Official API empty paragraphs have properties.title = [], not missing properties.
+      const isBlank = !title?.some(([text, decorations]) => text?.length || decorations?.length)
+        && !block.content?.length
       const blockColor = block.format?.block_color
 
       return (
         <div
           className={cs(
             'notion-text',
+            isBlank && 'notion-blank',
             blockColor && `notion-${blockColor}`,
             blockId
           )}
+          aria-hidden={isBlank || undefined}
         >
-          {block.properties?.title && (
-            <Text value={block.properties.title} block={block} />
-          )}
+          {isBlank ? '\u00a0' : title && <Text value={title} block={block} />}
 
           {children && <div className='notion-text-children'>{children}</div>}
         </div>

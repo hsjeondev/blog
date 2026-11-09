@@ -5,6 +5,7 @@ import { bookDatabaseId, isPublishedBook, notionId, notionRequest } from '../not
 import { commentReferences } from '../comment-references';
 import { collectPage, type SyncStore } from './notion-sync';
 import { withNotionPacing } from './notion-pacing';
+import { webhookErrorCode, type WebhookFailure } from './webhook-diagnostics';
 
 const pageTypes = new Set(['page.created', 'page.properties_updated', 'page.content_updated', 'page.deleted', 'page.undeleted', 'page.moved']);
 const commentTypes = new Set(['comment.created', 'comment.updated', 'comment.deleted']);
@@ -82,24 +83,26 @@ async function syncGraphDelta(store: SyncStore, source: string, worker: string, 
 
 // Work stays attached to the HTTP request. Return 503 until work is complete,
 // so Notion's delivery retries recover durable queued/failed work as well.
-export async function drainNotionEvents(store: SyncStore, signal: AbortSignal, source = bookDatabaseId()) {
+export async function drainNotionEvents(store: SyncStore, signal: AbortSignal, source = bookDatabaseId(), report?: (failure: WebhookFailure) => void) {
   const worker = randomUUID();
   try {
     for (let processed = 0; processed < 5; processed++) {
       signal.throwIfAborted();
       const event = await store.call('blog_claim_notion_event', { p_database: source, p_worker: worker }, signal);
       if (event.status === 'empty') return true;
-      if (event.status !== 'claimed') return false;
+      if (event.status !== 'claimed') { report?.({ code: event.status === 'busy' ? 'WORKER_BUSY' : 'WORK_NOT_READY' }); return false; }
       try {
         await withNotionPacing(() => event.type === 'graph.refresh'
           ? syncGraphDelta(store, source, worker, event, signal) : syncPageDelta(store, source, worker, event, signal));
         await store.call('blog_finish_notion_event', { p_database: source, p_worker: worker, p_event: event.id, p_success: true, p_error: null }, signal);
       } catch (error) {
+        report?.({ code: webhookErrorCode(error), status: error.status });
         await store.call('blog_finish_notion_event', { p_database: source, p_worker: worker, p_event: event.id,
           p_success: false, p_error: `Sync failed (${error.status || error.code || error.name || 'unknown'})` }, AbortSignal.timeout(5000)).catch(() => {});
         return false;
       }
     }
+    report?.({ code: 'BATCH_LIMIT' });
     return false; // A later signed retry continues the bounded batch.
   } finally {
     await store.call('blog_release_notion_worker', { p_database: source, p_worker: worker }, AbortSignal.timeout(5000)).catch(() => {});

@@ -14,17 +14,20 @@ const retry=require('../pages/api/notion/retry.ts').default;
 const token='fixture-verification-token-only';
 const event={id:ids[11],type:'page.properties_updated',timestamp:'2026-10-30T00:00:00Z',entity:{id:published,type:'page'}};
 const signature=raw=>'sha256='+createHmac('sha256',token).update(raw).digest('hex');
+const {webhookErrorCode}=require('../utils/sync/webhook-diagnostics.ts');
 function request(raw='',headers={},method='POST'){return Object.assign(Readable.from([Buffer.from(raw)]),{method,headers:{'content-type':'application/json',...headers}});}
 function response(){return {headers:{},setHeader(k,v){this.headers[k]=v;},status(n){this.statusCode=n;return this;},json(value){this.body=value;return this;}};}
 async function fixture(run,jobs=[]){
-  const env={...process.env},fetch=global.fetch,create=storage.createSyncStore,pace=pacing.withNotionPacing,f=upstream(),calls=[];
+  const env={...process.env},fetch=global.fetch,create=storage.createSyncStore,pace=pacing.withNotionPacing,f=upstream(),calls=[],diagnostics=[],logs=[];
+  const loggers={info:console.info,error:console.error,warn:console.warn};
+  for(const level of Object.keys(loggers))console[level]=(...args)=>logs.push({level,args});
   Object.assign(process.env,{NOTION_TOKEN:'fixture',NOTION_MYBOOKLIST_ID:database,NOTION_WEBHOOK_VERIFICATION_TOKEN:token,
     NEXT_PUBLIC_SUPABASE_URL:'https://fixture.supabase.co',SUPABASE_SECRET_KEY:'fixture-server-key'});
   delete process.env.SUPABASE_SERVICE_ROLE_KEY;delete process.env.NOTION_API_KEY;delete process.env.NOTION_WEBHOOK_SUBSCRIPTION_ID;delete process.env.CRON_SECRET;
   global.fetch=f.fetch;pacing.withNotionPacing=work=>work();
-  const store={async call(name,args){calls.push({name,args:structuredClone(args)});if(name==='blog_sync_started_at')return '2026-10-30T00:00:00Z';if(name==='blog_claim_notion_event')return jobs.shift()||{status:'empty'};return true;}};
+  const store={async call(name,args){if(name==='blog_record_webhook_delivery'){diagnostics.push(structuredClone(args.p_delivery));return null;}calls.push({name,args:structuredClone(args)});if(name==='blog_sync_started_at')return '2026-10-30T00:00:00Z';if(name==='blog_claim_notion_event')return jobs.shift()||{status:'empty'};return true;}};
   storage.createSyncStore=()=>store;
-  try{await run({f,calls,store});}finally{global.fetch=fetch;process.env=env;storage.createSyncStore=create;pacing.withNotionPacing=pace;}
+  try{await run({f,calls,store,diagnostics,logs});}finally{global.fetch=fetch;process.env=env;storage.createSyncStore=create;pacing.withNotionPacing=pace;Object.assign(console,loggers);}
 }
 
 test('signature uses the exact raw bytes, rejects altered Unicode/whitespace and malformed lengths',()=>{
@@ -32,6 +35,50 @@ test('signature uses the exact raw bytes, rejects altered Unicode/whitespace and
   assert.equal(validNotionSignature(raw,signature(raw),token),true);
   assert.equal(validNotionSignature(Buffer.from(JSON.stringify(JSON.parse(raw))),signature(raw),token),false);
   for(const value of [undefined,'sha256=short','sha256='+'g'.repeat(64),['sha256=abc']])assert.equal(validNotionSignature(raw,value,token),false);
+});
+test('rejected signatures are diagnosed without trusting or retaining the body or credentials',()=>fixture(async({diagnostics,logs,calls})=>{
+  const res=response();
+  await handler(request(JSON.stringify({...event,unused:'PRIVATE_BODY'}),{'x-notion-signature':'PRIVATE_SIGNATURE',authorization:'PRIVATE_AUTHORIZATION'}),res);
+  const last=diagnostics.at(-1);
+  assert.equal(last.status_code,401);assert.equal(last.stage,'signature');assert.equal(last.error_code,'INVALID_SIGNATURE');
+  assert.equal(last.signature_valid,false);assert.equal(last.event_id,undefined);assert.equal(calls.length,0);
+  const serialized=JSON.stringify({diagnostics,logs});
+  for(const value of ['PRIVATE_BODY','PRIVATE_SIGNATURE','PRIVATE_AUTHORIZATION',token,'fixture-server-key'])assert.ok(!serialized.includes(value));
+  assert.equal(last.request_id,res.headers['X-Webhook-Request-Id']);
+}));
+test('busy delivery records its attempt, first checkpoint and final 503 independently of the event queue',()=>fixture(async({diagnostics})=>{
+  const raw=JSON.stringify({...event,attempt_number:3,subscription_id:ids[10]});
+  const res=response();await handler(request(raw,{'x-notion-signature':signature(raw)}),res);
+  assert.equal(diagnostics[0].finished_at,null);assert.equal(diagnostics[0].status_code,null);
+  assert.ok(diagnostics.some(row=>row.stage==='sync'&&row.finished_at===null));
+  const last=diagnostics.at(-1);
+  assert.equal(last.status_code,503);assert.equal(last.error_code,'WORKER_BUSY');assert.equal(last.attempt_number,3);
+  assert.equal(last.subscription_id,ids[10]);assert.equal(last.event_id,event.id);assert.equal(last.database_id,database);
+  assert.ok(last.finished_at);assert.ok(last.duration_ms>=0);
+},[{status:'busy'}]));
+test('upstream failures are diagnosed without discarding queued work or exposing raw error messages',()=>fixture(async({diagnostics,calls})=>{
+  global.fetch=async()=>Response.json({code:'unauthorized',message:'PRIVATE_UPSTREAM_BODY'},{status:401});
+  const raw=JSON.stringify(event),res=response();await handler(request(raw,{'x-notion-signature':signature(raw)}),res);
+  const last=diagnostics.at(-1);
+  assert.equal(last.status_code,503);assert.equal(last.upstream_status,401);assert.equal(last.stage,'sync');
+  assert.ok(calls.some(call=>call.name==='blog_finish_notion_event'&&call.args.p_success===false));
+  assert.ok(!JSON.stringify(diagnostics).includes('PRIVATE_UPSTREAM_BODY'));
+},[{status:'claimed',id:ids[11],type:'page.properties_updated',pageId:published}]));
+test('diagnostic storage failure leaves the original webhook response intact and uses sanitized console output',()=>fixture(async({store,logs})=>{
+  const original=store.call;
+  store.call=async(name,args,signal)=>{if(name==='blog_record_webhook_delivery')throw Object.assign(new Error('PRIVATE_LOG_CREDENTIAL'),{code:'PGRST303'});return original(name,args,signal);};
+  const raw=JSON.stringify(event),res=response();await handler(request(raw,{'x-notion-signature':signature(raw)}),res);
+  assert.equal(res.statusCode,200);
+  assert.ok(logs.some(log=>log.args[0]==='notion_webhook_log_unavailable'));
+  assert.ok(JSON.stringify(logs).includes('PGRST303'));assert.ok(!JSON.stringify(logs).includes('PRIVATE_LOG_CREDENTIAL'));
+}));
+test('error code extraction excludes arbitrary messages and codes',()=>{
+  assert.equal(webhookErrorCode({message:'PRIVATE',code:'PRIVATE_SECRET'}),'UNKNOWN_ERROR');
+  assert.equal(webhookErrorCode({code:'PGRST303'}),'PGRST303');
+  assert.equal(webhookErrorCode({name:'TimeoutError'}),'TimeoutError');
+  assert.equal(webhookErrorCode({status:429}),'HTTP_429');
+  assert.equal(webhookErrorCode({cause:{code:'ECONNRESET'},name:'TypeError'}),'ECONNRESET');
+  assert.equal(webhookErrorCode({message:'Notion page did not stabilize'}),'PAGE_UNSTABLE');
 });
 test('only page-level comments map to their parent book, and unknown event types are ignored',()=>{
   const comment={...event,type:'comment.updated',entity:{type:'comment',id:target},data:{page_id:published,parent:{type:'page',id:published}}};

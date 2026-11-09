@@ -74,7 +74,7 @@ export function createAssetMirror(store: SyncStore, management = false) {
   let secret: Promise<string> | undefined;
   return async (input: SyncBook, signal?: AbortSignal): Promise<SyncBook> => {
     const book = structuredClone(input), pageId = book.post.id;
-    const cacheRows = await store.call('blog_sync_asset_cache', { p_database: bookDatabaseId(), p_page: pageId }, signal);
+    const cacheRows = await store.call('blog_sync_asset_cache', { p_database: book.post.notion_database_id || bookDatabaseId(), p_page: pageId }, signal);
     if (!Array.isArray(cacheRows)) throw new Error('Invalid asset cache');
     const cache = new Map(cacheRows.map(item => [item.asset_key, item]));
     const candidates = new Set<string>();

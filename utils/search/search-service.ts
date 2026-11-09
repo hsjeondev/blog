@@ -1,14 +1,16 @@
 import { getDatabase } from '../blog-data';
 import { bookMetadata, publicationKind } from '../book-metadata';
-import { bookDatabaseId } from '../notion-server';
-import { supabaseRead } from '../supabase-http';
+import { bookDatabaseId, notionId } from '../notion-server';
+import { supabaseReadAll as supabaseRead } from '../supabase-http';
 import { normalizeFolderPath } from './folders';
 import type { SearchResult, SearchScope } from './types';
+import { matchesSearchScope } from './types';
 export { searchableBody } from '../record-map-text';
 
 export function normalizePage(page: any, type: SearchResult['type']): SearchResult {
   const meta = bookMetadata(page);
-  return { id: meta.id, title: meta.title, author: meta.author, category: meta.category, type, folderPath: normalizeFolderPath(meta.folderPath),
+  return { id: meta.id, title: meta.title, author: meta.author, category: meta.category, type,
+    source: notionId(page.parent?.database_id) === bookDatabaseId() ? 'books' : 'writing', folderPath: normalizeFolderPath(meta.folderPath),
     href: type === 'document' ? '/forest?document=' + meta.id : type === 'recap' ? '/recap?document=' + meta.id : '/' + meta.id,
     createdTime: meta.createdTime, lastEditedTime: meta.lastEditedTime };
 }
@@ -17,7 +19,7 @@ export async function getSearchCatalog(signal?: AbortSignal): Promise<SearchResu
 }
 export function inScope(item: SearchResult, scope: SearchScope = 'all', folder = '') {
   const path = normalizeFolderPath(folder);
-  return (scope === 'all' || item.type === scope) && (!path || item.folderPath === path || item.folderPath.startsWith(path + '/'));
+  return matchesSearchScope(item, scope) && (!path || item.folderPath === path || item.folderPath.startsWith(path + '/'));
 }
 const normalize = (value: string) => value.normalize('NFKC').toLocaleLowerCase('ko-KR');
 const metadataMatch = (item: SearchResult, query: string) => [item.title, item.author || '', item.category || ''].some(value => normalize(value).includes(query));

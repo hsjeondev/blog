@@ -103,6 +103,105 @@ body {
   font-family: "NanumSquareNeo", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }
 
+#__next {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.site-content {
+  flex: 1 0 auto;
+  min-width: 0;
+}
+
+.site-footer {
+  flex-shrink: 0;
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  padding-bottom: max(2rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));
+  border-top: 1px solid var(--secondary);
+  color: var(--date-text);
+  font-size: 0.75rem;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.site-footer p {
+  margin: 0;
+}
+
+.site-footer p + p {
+  margin-top: 0.5rem;
+}
+
+.site-footer a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.site-footer a:hover,
+.site-footer a:focus-visible {
+  color: var(--foreground);
+}
+
+.article-card-with-book-cover {
+  min-height: 20rem;
+  isolation: isolate;
+}
+
+.article-card-with-book-cover .article-card-content {
+  flex: 1;
+  min-height: 17rem;
+}
+
+.article-card-book-cover {
+  position: absolute;
+  right: -5%;
+  bottom: -8%;
+  width: 46%;
+  height: 64%;
+  object-fit: cover;
+  object-position: top left;
+  pointer-events: none;
+  user-select: none;
+  transform: rotate(-8deg);
+  filter: var(--book-cover-filter, none);
+  box-shadow: -10px 8px 28px rgb(0 0 0 / 16%);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.article-card-book-cover.is-loaded {
+  opacity: 1;
+}
+
+.article-card-book-cover.is-cached {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .article-card-book-cover {
+    transition: none;
+  }
+}
+
+html.dark {
+  --book-cover-filter: grayscale(1);
+}
+
+html.light {
+  --book-cover-filter: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.light) {
+    --book-cover-filter: grayscale(1);
+  }
+}
+
 main {
   max-width: var(--max-width);
   margin: 0 auto;
@@ -150,6 +249,20 @@ header.header-menu-open {
 
 .header-leading {
   gap: 2rem;
+  min-width: 0;
+}
+
+.header-brand {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.header-brand h3 {
+  line-height: 1.4;
+}
+
+.header-content > :last-child {
+  flex-shrink: 0;
 }
 
 .header-navigation {
@@ -260,7 +373,7 @@ header.header-menu-open {
   display: none;
 }
 
-@media (max-width: 639px) {
+@media (max-width: 767px) {
   .header-theme-wrapper {
     display: none !important;
   }
@@ -281,6 +394,7 @@ header.header-menu-open {
     place-items: center;
     border-radius: 999px;
     font-size: 1.4rem;
+    flex-shrink: 0;
   }
 
   .mobile-menu {
@@ -289,7 +403,7 @@ header.header-menu-open {
     inset: 0;
     z-index: 1100;
     align-items: flex-start;
-    justify-content: center;
+    justify-content: flex-start;
     padding: 86px 14px 24px;
   }
 
@@ -310,7 +424,7 @@ header.header-menu-open {
   .mobile-menu-panel {
     position: relative;
     z-index: 1;
-    width: min(calc(100vw - 28px), 420px);
+    width: min(100%, 360px);
     max-height: calc(100dvh - 110px);
     padding: 14px;
     overflow: auto;
@@ -403,6 +517,7 @@ header.header-menu-open {
   width: 100%;
   max-width: 100%;
   margin: 0 auto;
+  min-width: 0;
 }
 
 .post-reading-layout {
@@ -414,6 +529,22 @@ header.header-menu-open {
 .post-reading-layout > .page-container {
   max-width: 1100px;
   margin-inline: auto;
+}
+
+.post-title-row {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 639px) {
+  .post-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .post-reading-layout {
+    padding-inline: 16px;
+  }
 }
 
 .post-reading-layout .post-content .notion .custom-content {

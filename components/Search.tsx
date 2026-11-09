@@ -5,7 +5,7 @@ import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "framer-
 import { AnswerMarkdown } from "./Search/AnswerMarkdown";
 import { AnswerStreamQueue, type AgentProgress } from "../utils/search/answer-stream";
 import { useSearchResults } from "../hooks/useSearchResults";
-import { SEARCH_SCOPES, scopeLabels, type SearchOptions, type SearchResult, type SearchScope } from "../utils/search/types";
+import { SEARCH_TABS, scopeLabels, type SearchOptions, type SearchResult, type SearchScope } from "../utils/search/types";
 
 const MotionLink = motion.create(Link);
 const resultKey = (query: string, id: string) => `${query.trim()}:${id}`;
@@ -25,7 +25,7 @@ const SearchResultItem = React.forwardRef<HTMLAnchorElement, {
     <motion.div key={`${result.title}:${result.excerpt || ""}`}
       initial={{ opacity: reducedMotion ? 1 : .45 }} animate={{ opacity: 1 }} transition={{ duration: reducedMotion ? 0 : .18 }}>
       <strong>{result.title}</strong>
-      <small>{scopeLabels[result.type]}{result.folderPath && ` · ${result.folderPath.replaceAll("/", " / ")}`}</small>
+      <small>{result.type === 'post' && result.source ? scopeLabels[result.source] : scopeLabels[result.type]}{result.folderPath && ` · ${result.folderPath.replaceAll("/", " / ")}`}</small>
       {(result.author || result.category) && <small>{[result.author, result.category].filter(Boolean).join(' · ')}</small>}
       {result.excerpt && <p>{result.excerpt}</p>}
     </motion.div>
@@ -36,7 +36,7 @@ export function Search({ onClose, initialOptions = {} }: { onClose: () => void; 
   const router = useRouter();
   const aiGradientId = useId();
   const [query, setQuery] = useState("");
-  const [scope, setScope] = useState<SearchScope>(initialOptions.scope || "all");
+  const [scope, setScope] = useState<SearchScope>(initialOptions.scope === 'books' || initialOptions.scope === 'writing' ? initialOptions.scope : 'all');
   const [folder, setFolder] = useState(initialOptions.folder || "");
   const { results, loading, error, partial, body, searchBody, stopBody } = useSearchResults(query, scope, folder);
   const reducedMotion = useReducedMotion();
@@ -166,7 +166,7 @@ export function Search({ onClose, initialOptions = {} }: { onClose: () => void; 
         }
       }}>
       <div className="global-search-input">
-        <input ref={inputRef} value={query} maxLength={300} aria-label="블로그 검색어" placeholder="책 제목·저자·분류로 검색"
+        <input ref={inputRef} value={query} maxLength={300} aria-label="블로그 검색어" placeholder="제목·저자·카테고리로 검색"
           onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => {
             if (event.nativeEvent.isComposing) return;
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void askAgent(); }
@@ -191,7 +191,7 @@ export function Search({ onClose, initialOptions = {} }: { onClose: () => void; 
           </svg>
           <span className="global-search-ai-label">AI</span>
         </button>
-        {SEARCH_SCOPES.map((value) => <button key={value} type="button" aria-pressed={!answerMode && scope === value}
+        {SEARCH_TABS.map((value) => <button key={value} type="button" aria-pressed={!answerMode && scope === value}
           onClick={() => {
             agentRef.current?.abort(); setAgentLoading(false); setAnswerMode(false); setAgentStopped(false);
             setScope(value); setFolder("");
@@ -201,7 +201,7 @@ export function Search({ onClose, initialOptions = {} }: { onClose: () => void; 
       <motion.div className="global-search-body" layoutScroll>
         {!answerMode && <>
         <div role="status" className="global-search-status">
-          {!query.trim() ? "책 제목·저자·분류를 먼저 검색합니다. 본문은 ‘본문에서도 검색’으로 확인할 수 있습니다." : error ? error : loading ? "책 정보를 검색하고 있습니다…" : body.loading ? `검색 결과 ${results.length}개 · 본문 확인 중 ${body.scanned}/${body.total}` : `검색 결과 ${results.length}개`}
+          {!query.trim() ? "제목·저자·카테고리를 먼저 검색합니다. 본문은 ‘본문에서도 검색’으로 확인할 수 있습니다." : error ? error : loading ? "글 정보를 검색하고 있습니다…" : body.loading ? `검색 결과 ${results.length}개 · 본문 확인 중 ${body.scanned}/${body.total}` : `검색 결과 ${results.length}개`}
           {partial && <p>일부 본문은 확인하지 못했습니다.</p>}
           {body.error && <p role="alert">{body.error}</p>}
           {body.stopped && <p>본문 검색을 중지했습니다.</p>}

@@ -8,6 +8,7 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
 
 const { syncPublishedNotion, syncNotionPage } = require('../utils/sync/notion-sync.ts');
 const { createSyncStore } = require('../utils/sync/supabase-store.ts');
+const { blogDatabaseIds } = require('../utils/notion-server.ts');
 const args = process.argv.slice(2);
 let management = false, pageId;
 for (let index = 0; index < args.length; index++) {
@@ -47,9 +48,13 @@ global.fetch = async (url, options = {}) => {
 (async () => {
   const store = createSyncStore(management);
   const progress = value => console.log(JSON.stringify(value));
-  const result = pageId ? await syncNotionPage(store, pageId, controller.signal, progress)
-    : await syncPublishedNotion(store, controller.signal, progress);
-  console.log(JSON.stringify({ phase: 'complete', ...result }));
+  if (pageId) {
+    const result = await syncNotionPage(store, pageId, controller.signal, progress);
+    console.log(JSON.stringify({ phase: 'complete', ...result }));
+  } else for (const source of blogDatabaseIds()) {
+    const result = await syncPublishedNotion(store, controller.signal, progress, source);
+    console.log(JSON.stringify({ phase: 'complete', source, ...result }));
+  }
 })().catch(error => {
   console.error(JSON.stringify({ phase: 'failed', error: error.name, status: error.status, code: error.code }));
   process.exitCode = 1;

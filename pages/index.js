@@ -1,26 +1,25 @@
 "use client";
 import { PageHead } from "../components/PageHead";
 import Link from "next/link";
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArticleCard } from '../components/ArticleCard';
+import { motion } from 'framer-motion';
+import PostGrid from '../components/PostGrid';
 import { publishedBooks } from "../utils/blog-data";
 import { noPublicationCache } from "../utils/notion-server";
 import IonIcon from "../components/Icon";
-import { useRouter } from 'next/router';
 import { useEffect } from 'react';
 
 export async function getServerSideProps({ res }) {
   noPublicationCache(res);
   try {
-    return { props: { list: (await publishedBooks()).filter((post) => post.kind === 'post'), loadError: false } };
+    const posts = (await publishedBooks()).filter(post => post.kind === 'post');
+    return { props: { books: posts.filter(post => post.source === 'books').slice(0, 6), writing: posts.filter(post => post.source === 'writing').slice(0, 6), loadError: false } };
   } catch {
     res.statusCode = 503;
-    return { props: { list: [], loadError: true } };
+    return { props: { books: [], writing: [], loadError: true } };
   }
 }
 
-export default function Home({ list, loadError }) {
-  const router = useRouter();
+export default function Home({ books, writing, loadError }) {
 
   useEffect(() => {
     const savedPosition = sessionStorage.getItem('indexScrollPosition');
@@ -50,8 +49,8 @@ export default function Home({ list, loadError }) {
       />
 
       <motion.h1 layoutId="page-hero" className="text-2xl text-gray-400 font-black mb-4 md:text-3xl text-balance" style={{ wordBreak: 'keep-all', overflowWrap: 'break-word' }}>
-        안녕하세요, <span style={{ color: 'var(--foreground)' }}>프리머그</span>입니다.<br />
-        <span style={{ color: 'var(--foreground)' }}>책</span>으로 쌓은 <span style={{ color: 'var(--foreground)' }}>지식</span>을 기록하고 연결합니다.
+        안녕하세요, <span style={{ color: '#E25334' }}>프리머그</span>입니다.<br />
+        나를 돌아보고 세상을 바라보며, <span style={{ color: '#E25334' }}>삶의 이야기</span>를 기록하고 <span style={{ color: '#E25334' }}>연결</span>합니다.
       </motion.h1>
       <motion.button
         whileHover={{ scale: 1.02 }}
@@ -63,19 +62,17 @@ export default function Home({ list, loadError }) {
 
 
       {loadError && <p role="alert">기록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>}
-      {!loadError && !list.length && <p>공개된 기록이 아직 없습니다.</p>}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
-        <AnimatePresence>
-          {list.map((post) => (
-            <div key={post.id} className="no-underline">
-              <ArticleCard
-                post={post}
-                onClick={() => router.push(`/${post.id}`)}
-              />
-            </div>
-          ))}
-        </AnimatePresence>
-      </div>
+      {!loadError && [
+        { title: '책 이야기', path: '/books', posts: books },
+        { title: '글 이야기', path: '/writing', posts: writing },
+      ].map(section => <section key={section.path} className="mt-12" aria-label={section.title}>
+        <h2 className="text-xl md:text-2xl font-black mb-5">
+          <Link href={section.path} aria-label={`${section.title} 전체 보기`} className="inline-flex items-center gap-2 no-underline text-inherit">
+            {section.title}<IonIcon name="chevron-forward" />
+          </Link>
+        </h2>
+        {section.posts.length ? <PostGrid posts={section.posts} /> : <p>공개된 글이 아직 없습니다.</p>}
+      </section>)}
     </motion.main>
   );
 }

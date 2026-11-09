@@ -1,6 +1,7 @@
 import * as React from "react";
 import * as d3 from "d3";
 import { compactNotionId } from "../../utils/backlink-graph";
+import { fitGraphBounds } from "../../utils/graph-viewport";
 
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
 
@@ -36,6 +37,7 @@ export function KnowledgeGraph({ data, activeId, variant = "full", className = "
   const hostRef = React.useRef<HTMLDivElement>(null);
   const svgRef = React.useRef<SVGSVGElement>(null);
   const navigateRef = React.useRef(onNavigate);
+  const resetViewRef = React.useRef<(() => void) | null>(null);
   React.useEffect(() => { navigateRef.current = onNavigate; }, [onNavigate]);
   const [size, setSize] = React.useState({ width: 0, height: 0 });
 
@@ -231,8 +233,10 @@ export function KnowledgeGraph({ data, activeId, variant = "full", className = "
           .strength((item: SimulationNode) => item.kind === "group" ? 0 : 0.12));
     }
 
+    let viewChanged = false;
     node.call(d3.drag()
       .on("start", (event, item) => {
+        viewChanged = true;
         if (!event.active) simulation.alphaTarget(0.25).restart();
         item.fx = item.x;
         item.fy = item.y;
@@ -298,14 +302,50 @@ export function KnowledgeGraph({ data, activeId, variant = "full", className = "
       }
     } else {
       updateLabelVisibility(currentTransform);
+      const zoom = d3.zoom()
+        .scaleExtent([0.01, 3])
+        // This graph sits inside an article: the wheel must keep scrolling it.
+        .filter((event) => event.type !== 'wheel' && event.type !== 'dblclick' && !event.button)
+        .on('start', (event) => { if (event.sourceEvent) viewChanged = true; })
+        .on('zoom', (event) => {
+          currentTransform = event.transform;
+          viewport.attr('transform', event.transform);
+        });
+      svg.call(zoom).on('dblclick.zoom', null);
+      const fit = () => {
+        const bounds = viewport.node()?.getBBox();
+        if (!bounds) return;
+        const { x, y, k } = fitGraphBounds(bounds, size.width, size.height);
+        svg.call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(k));
+      };
+      resetViewRef.current = fit;
+      fit();
+      // A late webfont can change label widths after the initial measurement.
+      let disposed = false;
+      document.fonts?.ready.then(() => { if (!disposed && !viewChanged) fit(); });
+      return () => {
+        disposed = true;
+        resetViewRef.current = null;
+        svg.on('.zoom', null);
+        simulation.stop();
+      };
     }
 
-    return () => simulation.stop();
+    return () => { svg.on('.zoom', null); simulation.stop(); };
   }, [activeId, data, size, variant]);
 
   return (
     <div ref={hostRef} className={`knowledge-graph knowledge-graph-${variant} ${className}`}>
-      <svg ref={svgRef} viewBox={`0 0 ${size.width || 1} ${size.height || 1}`} aria-label="문서 연결 그래프" />
+      <svg ref={svgRef} viewBox={`0 0 ${size.width || 1} ${size.height || 1}`} aria-label="이야기 연결 그래프" />
+      {variant === 'compact' && data.nodes.length > 0 && <button
+        type="button" className="knowledge-graph-reset"
+        aria-label="그래프 위치 초기화" title="그래프 위치 초기화"
+        onClick={() => resetViewRef.current?.()}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20 10a8 8 0 1 0 .5 5M20 4v6h-6" />
+        </svg>
+      </button>}
     </div>
   );
 }

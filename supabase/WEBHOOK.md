@@ -53,6 +53,29 @@ Notion 구독을 다시 만들면 토큰도 바뀝니다. 이 경우 기존 환�
 Notion에서 공개 체크를 해제한 뒤 `blog_posts.deleted_at`과 `is_published`, `blog_sync_events.status`를 확인합니다.
 재공개하면 동일 ID의 `deleted_at`이 비워지고 본문이 갱신되어야 합니다. 실제 운영 글의 공개 상태를 바꾸는 검사는 사용자가 수행합니다.
 
+## 전달 오류 기록
+
+POST 수신 시 `blog_webhook_deliveries`에 시작 기록을 만들고, 작업 등록 후 체크포인트와 응답 직전의 결과를 같은 요청 ID로 갱신합니다.
+응답 코드, 처리 단계, 처리 시간, 서명 검증 결과, 검증된 이벤트의 ID·종류·전달 시도 번호, 오류 코드·고정 오류 메시지, 감지된 연결 종료 여부를 저장합니다.
+본문·댓글·작성자·IP·헤더·서명·토큰·원문 예외 메시지는 저장하지 않습니다. 테이블과 기록 RPC는 서버 역할만 접근할 수 있습니다.
+새 기록을 쓸 때 30일 지난 행부터 정리하고 최대 20,000행을 유지합니다.
+
+```sql
+select started_at, finished_at, request_id, event_type, attempt_number,
+       stage, status_code, duration_ms, client_disconnected,
+       error_code, upstream_status, error_message
+from public.blog_webhook_deliveries
+order by started_at desc
+limit 50;
+```
+
+`finished_at`이 계속 비어 있으면 처리 중 종료됐거나 마지막 로그 저장이 실패했을 수 있습니다.
+`status_code`는 서버가 보내려던 응답이며 Notion이 실제로 받았다는 증거는 아닙니다.
+Vercel에는 같은 요청 ID로 `notion_webhook_started`, `notion_webhook_result`, `notion_webhook_response_finished`를 남깁니다.
+DB 기록 실패는 `notion_webhook_log_unavailable`, 처리 중 연결 종료는 `notion_webhook_client_disconnected`로 구분합니다.
+기록 RPC 한 번의 대기 시간은 최대 800ms이며 실패해도 기존 처리 결과를 바꾸지 않습니다.
+Vercel 차단·네트워크 오류처럼 핸들러 실행 전의 실패는 이 테이블에 남길 수 없으므로 플랫폼 요청 로그를 함께 확인해야 합니다.
+
 ## 수동 재시도
 
 `blog_sync_events`의 `failed`, `last_error`, `attempts`를 확인합니다. Notion 재전송이 끝났거나 원인을 해결한 뒤 수동 복구하려면 **POST `/api/notion/retry`**를 호출합니다.

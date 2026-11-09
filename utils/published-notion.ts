@@ -4,11 +4,11 @@ import { isPublishedBook, notionId, notionRequest, notPublished } from './notion
 import { bookMetadata } from './book-metadata';
 export { bookMetadata, propertyText, publicationKind, siteUrl } from './book-metadata';
 
-export async function getPublishedPage(pageId: string, signal?: AbortSignal) {
+export async function getPublishedPage(pageId: string, signal?: AbortSignal, databaseId?: string) {
   const id = notionId(pageId);
   if (!id) throw notPublished();
   const page = await notionRequest('pages/' + id, undefined, signal);
-  if (!isPublishedBook(page)) throw notPublished();
+  if (!isPublishedBook(page, databaseId)) throw notPublished();
   return page;
 }
 

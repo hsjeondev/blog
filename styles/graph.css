@@ -9,7 +9,7 @@
 
 .backlink-graph-heading {
   display: flex;
-  align-items: top;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
   padding: 18px 20px 0;
@@ -21,7 +21,10 @@
 
 .backlink-graph-heading>div {
   display: grid;
+  min-width: 0;
   gap: 3px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .backlink-graph-heading b {
@@ -53,6 +56,12 @@
   background: var(--primary-light);
   font-size: 0.72rem;
   font-weight: 900;
+  white-space: nowrap;
+}
+
+.backlink-graph-cta:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
 }
 
 .knowledge-graph,
@@ -73,7 +82,41 @@
 }
 
 .knowledge-graph-compact {
-  height: 250px;
+  height: 360px;
+  cursor: grab;
+}
+
+.knowledge-graph-compact:active {
+  cursor: grabbing;
+}
+
+.knowledge-graph-reset {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  border-radius: 12px;
+  color: var(--foreground);
+  background: var(--card-bg);
+  cursor: pointer;
+}
+
+.knowledge-graph-reset:hover {
+  background: var(--secondary);
+}
+
+.knowledge-graph-reset:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.knowledge-graph .knowledge-graph-reset svg {
+  width: 20px;
+  height: 20px;
 }
 
 .knowledge-graph-full {
@@ -234,7 +277,7 @@
 }
 
 .knowledge-graph-compact .knowledge-graph-node text {
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .graph-page {
@@ -407,15 +450,18 @@
 @media (max-width: 760px) {
   .backlink-graph-heading {
     align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
     padding: 15px 15px 0;
   }
 
   .backlink-graph-cta {
-    padding: 0 10px;
+    min-height: 44px;
+    padding: 0 12px;
   }
 
   .knowledge-graph-compact {
-    height: 220px;
+    height: 300px;
   }
 
   .graph-page {

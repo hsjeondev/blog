@@ -106,6 +106,7 @@ export default function Page({ pageId, recordMap, summary }) {
 
             <div className='page-container'>
                 <PostHeader
+                    source={recordMap.block[pageId]?.value?.blog_metadata?.source}
                     title={title}
                     author={author}
                     category={category}

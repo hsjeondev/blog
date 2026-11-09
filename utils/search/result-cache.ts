@@ -1,5 +1,6 @@
 import { normalizeFolderPath } from "./folders";
 import type { SearchResult, SearchScope } from "./types";
+import { matchesSearchScope } from './types';
 
 export type SearchSnapshot = { results: SearchResult[]; partial: boolean };
 const MAX_ENTRIES = 24;
@@ -33,6 +34,6 @@ export class SearchResultCache {
     if (exact) return exact;
     const all = lookup("all", folder);
     if (!all || scope === "all") return all;
-    return { results: all.results.filter((result) => result.type === scope), partial: all.partial };
+    return { results: all.results.filter((result) => matchesSearchScope(result, scope)), partial: all.partial };
   }
 }
